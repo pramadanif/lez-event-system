@@ -1,0 +1,36 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Lock file for applications (keep for libraries)
+# Cargo.lock  # Keep this - important for reproducible builds
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Cloned LEZ repository (not part of this submission)
+logos-execution-zone/
+
+# Agent notes (internal documentation, not for submission)
+AGENT_NOTES.md
+PHASE2_COMPLETE.md
+HANDOFF.md
+PROMPT.md
+
+# Temporary files
+*.tmp
+*.bak
+.env
+.env.local
+
+# Test artifacts
+*.profraw
+
+# OS files
+.DS_Store
+Thumbs.db
