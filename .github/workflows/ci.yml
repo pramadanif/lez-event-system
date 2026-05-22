@@ -10,17 +10,23 @@ env:
   CARGO_TERM_COLOR: always
   # CRITICAL: Never use RISC0_DEV_MODE=1 in CI
   RISC0_DEV_MODE: "0"
+  RUST_BACKTRACE: "1"
+  RUST_LOG: "info"
 
 jobs:
-  build-and-test:
-    name: Build, Clippy, Test
+  lint-and-build:
+    name: Lint and Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
+      - name: Install build dependencies
+        run: sudo apt-get install -y build-essential clang libclang-dev libssl-dev pkg-config
+
+      - name: Install Rust toolchain (respects rust-toolchain.toml)
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: "1.94.0"
           components: clippy, rustfmt
 
       - name: Cache cargo registry
@@ -34,24 +40,78 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Cargo build (all workspace crates)
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (zero warnings — matches LEZ deny policy)
+        run: cargo clippy --workspace --tests -- -D warnings
+
+      - name: Build all crates
         run: cargo build --workspace
 
-      - name: Cargo clippy (zero warnings)
-        run: cargo clippy --workspace -- -D warnings
-
-      - name: Cargo test (all workspace crates)
-        run: cargo test --workspace
-
-      - name: Verify lez-event-cli binary builds
-        run: cargo build --bin lez-event-cli
-
-  format-check:
-    name: Format Check
+  unit-tests:
+    name: Unit Tests (RISC0_DEV_MODE=0)
     runs-on: ubuntu-latest
+    needs: lint-and-build
+    env:
+      RISC0_DEV_MODE: "0"
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust 1.94.0
+        uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
+          toolchain: "1.94.0"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run unit and integration tests (RISC0_DEV_MODE=0)
+        run: cargo test --workspace
+        env:
+          RISC0_DEV_MODE: "0"
+
+      - name: Verify lez-event-cli binary
+        run: cargo build --bin lez-event-cli
+
+  integration-tests:
+    name: Integration Tests (LEZ sequencer)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    env:
+      RISC0_DEV_MODE: "0"
+    steps:
+      - name: Checkout lez-event-system
+        uses: actions/checkout@v4
+
+      - name: Checkout LEZ repository
+        uses: actions/checkout@v4
+        with:
+          repository: logos-blockchain/logos-execution-zone
+          path: logos-execution-zone
+
+      - name: Install Rust 1.94.0
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.0"
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-lez-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run integration tests (RISC0_DEV_MODE=0)
+        run: ./scripts/run-integration-tests.sh
+        env:
+          RISC0_DEV_MODE: "0"
+          LEZ_DIR: ${{ github.workspace }}/logos-execution-zone

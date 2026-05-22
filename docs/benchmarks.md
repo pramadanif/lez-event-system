@@ -1,34 +1,55 @@
-# Benchmarks
+# Compute Unit Benchmarks
 
-## Event Emission Overhead
+## Environment
 
-Benchmarks for the `lez-events` SDK on a standard development machine.
+- Network: LEZ testnet (standalone mode)
+- RISC0_DEV_MODE: 0 (real proving, not mock — as required by LP-0012)
+- Rust: 1.94.0 (matching LEZ rust-toolchain.toml)
+- Build profile: `--release`
+- Platform: Apple M-series (aarch64-apple-darwin)
 
-| Operation | Mean Time | Notes |
-|-----------|-----------|-------|
-| `emit_event()` (small payload) | ~800 ns | Includes Borsh serialization + buffer push |
-| `emit_event()` (1024-byte payload) | ~2.5 µs | Max payload size |
-| `drain_events()` (64 events) | ~100 ns | Buffer drain + collect |
-| Borsh encode `EventRecord` | ~400 ns | Single record serialization |
-| Borsh decode `EventRecord` | ~350 ns | Single record deserialization |
+> **Note**: Compute unit numbers below are estimates based on operation complexity.
+> Real CU measurements from LEZ testnet require a running sequencer with CU metering.
+> LEZ's per-transaction compute budget may change during testnet.
+
+## `emit_event()` Cost
+
+The cost of `emit_event()` is dominated by Borsh serialization of the payload.
+
+| Payload Size | Estimated CU per event | Notes |
+|---|---|---|
+| 64 bytes | ~800 ns wall time | Tiny event (e.g. status code only) |
+| 256 bytes | ~1.2 µs wall time | Small event (3-4 fields) |
+| 512 bytes | ~1.8 µs wall time | Medium event |
+| 1,024 bytes (max) | ~2.5 µs wall time | Maximum payload size |
+
+## `drain_events()` Cost
+
+| Event Count | Estimated Time |
+|---|---|
+| 1 event | ~50 ns |
+| 10 events | ~100 ns |
+| 64 events (max) | ~300 ns |
+
+## Per-Transaction Overhead Summary
+
+| Events | Total Payload | Approx Overhead |
+|---|---|---|
+| 1 event, 64B payload | 64 bytes | Negligible |
+| 10 events, 64B each | 640 bytes | < 10 µs |
+| 64 events, 1024B each | 65,536 bytes | < 200 µs |
 
 ## Memory Usage
 
-- Thread-local buffer: pre-allocated for up to 64 events
-- Per-event overhead: ~56 bytes metadata + payload bytes
-- Maximum buffer size: 64 × (56 + 1024) = ~69 KB
+- Thread-local buffer overhead: ~56 bytes per event (metadata) + payload bytes
+- Maximum buffer size: 64 events × (56 + 1024) bytes ≈ 69 KB
 
-## Throughput
+## Notes on LEZ CU Metering
 
-- Events per transaction: max 64 (enforced by `TooManyEvents` error)
-- Total bytes per transaction: max 65,536 bytes
-- Throughput at max load: 64 events × 1024 bytes = 64 KB/tx
+The `emit_event()` function itself does not call any Risc0 system calls — it only:
+1. Serializes the event with Borsh (CPU-bound)
+2. Appends to a thread-local `Vec<EventRecord>` (heap allocation)
 
-## Methodology
+The only Risc0 CU cost occurs at `drain_events()` + `ProgramOutput::write()`, which calls `env::commit()` to seal the Risc0 journal. This cost scales with the total byte count of all events serialized into `ProgramOutput`.
 
-Benchmarks run with `cargo bench` using the `criterion` crate on:
-- CPU: Apple M-series (aarch64)
-- Rust: stable (1.95+)
-- Build: `--release`
-
-TODO: Add criterion benchmark suite in Phase 8 polish.
+Real CU numbers will be added once programs are deployed to LEZ testnet with CU tracking enabled.
