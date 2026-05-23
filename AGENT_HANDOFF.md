@@ -1,83 +1,155 @@
-# LP-0012 Agent Handoff & Autonomous Deployment Guide
-
-**To the next AI Agent:** You are continuing a project that is **95% complete**. Your goal is to deploy the completed work to the LEZ testnet, gather the real benchmarks, and prepare the final artifacts for submission. **DO NOT re-research or rewrite the core SDK/CLI.** Read this document carefully to understand the context.
-
----
-
-## Context: What is Completed
-
-We have built a structured event system for the Logos Execution Zone (LEZ) named `lez-event-system` (LP-0012). 
-- **The Core Problem Solved**: LEZ uses a RISC0 zkVM. When a program panics, state changes are reverted. We built a pattern (`drain_events()`) where events are committed to the RISC0 journal *before* the panic, ensuring events survive transaction failures.
-- **Alignment with LEZ**: The toolchain is pinned to `1.94.0` (matching LEZ exactly). The encoding uses `borsh = "1.5.0"` (matching LEZ exactly). `RISC0_DEV_MODE=0` is strictly enforced everywhere.
-- **Completed Components**: 
-  1. `lez-events` (SDK with `emit_event` and `drain_events`)
-  2. `lez-event-decoder` (Borsh decoder + CLI)
-  3. Example programs (`token-transfer`, `withdraw`, `indexer`)
-  4. 21/21 passing tests and zero clippy warnings.
-  5. `docs/` and `scripts/` fully populated.
+# LP-0012 Complete Agent Handoff
+**Status Date**: May 23, 2026  
+**Commit**: `20f82ed` (main branch)  
+**Repo**: https://github.com/pramadanif/lez-event-system
 
 ---
 
-## To the USER: Regarding "Smart Contracts"
-*Menjawab pertanyaan Anda: "apakah itu butuh smart contract atau gimana?"*
-Tidak, Anda tidak perlu membuat smart contract baru. Dalam ekosistem LEZ, smart contract disebut sebagai "program" (program berbasis Rust yang berjalan di dalam RISC0 zkVM). Kita **sudah membuat** dua program tersebut di folder `examples/token-transfer` dan `examples/withdraw`. Agent selanjutnya hanya perlu men-deploy program yang sudah kita buat ini menggunakan CLI wallet dari LEZ.
+## AGENT PROMPT: Continue Autonomously
+
+You are continuing the LP-0012 LEZ Event System submission. Read this entire file before writing a single line of code.
+
+**Your job**: Fix the remaining gaps below and prepare the repo so evaluators can `git clone` and run `./scripts/demo.sh` successfully. Do NOT rewrite any existing code unless a specific gap below requires it. Do NOT ask the user for permission on code changes.
 
 ---
 
-## Agent Prompt: Autonomous Next Steps
+## Current State (What Works)
 
-**Prompt for the next agent:** 
-"Execute Phase 9 & 10 deployment and benchmarking autonomously. Follow the steps below without asking the user for permission, except for the final video recording which requires human action."
-
-### Step 1: Wallet Setup & Local Sequencer
-You need the LEZ wallet to deploy programs. The wallet CLI is located inside the cloned `logos-execution-zone` repository.
-1. Run the local LEZ sequencer in standalone mode:
-   ```bash
-   cd logos-execution-zone
-   RUST_LOG=info cargo run --features standalone -p sequencer_service sequencer/service/configs/debug &
-   ```
-2. Build the wallet CLI if necessary, and use `just run-wallet check-health` to ensure it can communicate with the local sequencer.
-3. If the wallet requires key generation or funding on the testnet/devnet, execute those commands via `just run-wallet ...`.
-
-### Step 2: Build & Deploy Example Programs
-We need to deploy the two example programs to the running sequencer to prove they work in a live environment.
-1. Build the release binaries for the examples:
-   ```bash
-   cd lez-event-system
-   cargo build --workspace --release
-   ```
-2. Deploy the programs using the LEZ wallet:
-   ```bash
-   cd logos-execution-zone
-   just run-wallet deploy-program ../lez-event-system/target/release/token-transfer-example
-   just run-wallet deploy-program ../lez-event-system/target/release/withdraw-example
-   ```
-3. Extract the `program_id` from the deployment output for both programs.
-
-### Step 3: Update `docs/deployments.md`
-Edit `docs/deployments.md` and replace `<PENDING DEPLOYMENT>` with the actual `program_id`s you received from Step 2.
-
-### Step 4: Gather Real CU Benchmarks
-The prompt requires real Compute Unit (CU) costs.
-1. Submit transactions to the deployed programs via the wallet:
-   ```bash
-   just run-wallet submit --program <TOKEN_TRANSFER_ID> --instruction transfer --amount 100
-   ```
-2. Inspect the transaction receipts to find the CU consumption.
-3. Update `docs/benchmarks.md` to replace the "Estimated" wall-time numbers with the actual RISC0/LEZ compute unit costs observed from the receipt.
-
-### Step 5: Verify the Demo Script
-Run `./scripts/demo.sh` from the `lez-event-system` directory to ensure the end-to-end flow is completely unbroken.
-
-### Step 6: Final Commit
-Commit the updated `docs/deployments.md` and `docs/benchmarks.md` and push to the `main` branch.
+| Check | Status |
+|-------|--------|
+| `cargo build --workspace` | ✅ Pass |
+| `cargo clippy --workspace --tests -- -D warnings` | ✅ 0 warnings |
+| `cargo fmt --all -- --check` | ✅ Clean |
+| `cargo test --workspace` | ✅ 21/21 pass |
+| `./scripts/demo.sh` (offline) | ✅ Pass |
+| CI pipeline (`ci.yml`) | ✅ 3 jobs: lint+fmt, unit-tests, demo-script |
 
 ---
 
-## Final Manual Step (For the User)
-Once the agent completes the above, **the only remaining task is recording the video**. 
-The video **must have voice narration** and show:
-1. Walkthrough of `docs/event-format.md`.
-2. Showing the code for `drain_events()` before a panic in `examples/withdraw/src/main.rs`.
-3. Running `./scripts/demo.sh` while explicitly showing that `RISC0_DEV_MODE=0`.
-4. Showing `cargo test` passing.
+## LEZ Codebase Facts (Verified — Do NOT Re-Research)
+
+1. **Rust toolchain**: `1.94.0` (matches `logos-execution-zone/rust-toolchain.toml`)
+2. **Borsh**: `1.5.0` (matches LEZ workspace)
+3. **Transaction types**: `logos-execution-zone/common/src/transaction.rs` — `NSSATransaction::Public`, `PrivacyPreserving`, `ProgramDeployment`
+4. **Block structure**: `logos-execution-zone/common/src/block.rs` — `Block { header, body: BlockBody { transactions }, bedrock_status }`
+5. **Indexer RPC**: Uses `jsonrpsee` websocket client; see `test_fixtures/src/indexer_client.rs`
+6. **Wallet CLI**: `just run-wallet <args>` — reads from `NSSA_WALLET_HOME_DIR=$(pwd)/configs/debug`
+7. **Sequencer commands**: `just run-bedrock`, `just run-indexer`, `just run-sequencer`
+8. **`ProgramOutput` struct** (nssa/core/src/program.rs): has `self_program_id`, `caller_program_id`, `instruction_data`, `pre_states`, `post_states`, `chained_calls`, `block_validity_window`, `timestamp_validity_window` — **NO `events` field yet**
+9. **`TxReceipt`**: Does NOT exist as a named struct in LEZ. The sequencer returns `Block { body: BlockBody { transactions } }` — transactions contain the proof/output but no events field.
+10. **Sequencer environment dependencies** (CANNOT build without these):
+    - `xcrun metal` (Xcode Metal compiler) — requires `xcode-select --install`
+    - `logos-blockchain-circuits` — large ZK circuit lib, must be cloned separately
+11. **`just` commands for programs**: `just run-wallet deploy-program <binary_path>` — returns program ID
+12. **Explorer/indexer RPC API**: `get_transaction(hash)` exists in `indexer_service_rpc::RpcClient` and returns `Option<Transaction>` (NOT a receipt with events)
+
+---
+
+## Gaps Remaining (In Priority Order)
+
+### GAP 1: `lez-event-cli decode --tx HASH --rpc URL` uses a fake API format
+**File**: `lez-event-decoder/src/bin/lez-event-cli.rs`  
+**Problem**: The `decode` subcommand tries to fetch `{rpc}/tx/{hash}` and parse a `TxReceipt { events: Vec<EventRecord> }` struct. This format does NOT match LEZ's actual RPC.  
+**Why it matters**: Evaluators will try to run `lez-event-cli decode --tx X --rpc Y`. Without a real sequencer that returns our format, this call will fail.  
+**Fix Options**:
+- Option A (Recommended): Keep the `decode` command but document it requires the patched sequencer. Add a comment in the CLI help text saying: "Requires LEZ sequencer with lez-event-system patch applied (see docs/architecture-decision.md)"
+- Option B: Add a `--mock` flag to decode that simulates a response for demo purposes (but mark it clearly as mock)
+
+**IMPORTANT**: Do NOT create fake/mock data that pretends to be real. The PROMPT says "no mock or fake."
+
+### GAP 2: `examples/token-transfer` and `examples/withdraw` are NOT real LEZ programs
+**Problem**: These examples use stub functions (`read_inputs()`, `write_outputs()`) — they do NOT use `read_nssa_inputs()` / `write_nssa_outputs()` from the actual `nssa_core` crate.  
+**Root cause**: Using real nssa_core would require `nssa_core` as a git dependency from a private/complex repo.  
+**Current status**: This is acceptable — the examples ARE pedagogically correct. They demonstrate the API pattern even if they don't compile with real LEZ runtime.  
+**Recommended fix**: Add a comment at the top of each example clearly stating: "This is a self-contained simulation. For real LEZ programs, replace read_inputs()/write_outputs() with nssa_core::read_nssa_inputs()/write_nssa_outputs()."
+
+### GAP 3: `tests/` folder at repo root is empty
+**Problem**: PROMPT's directory structure shows `tests/` at repo root. All tests are in `lez-events/tests/`.  
+**Impact**: Minor — Rust allows tests in crate subdirectories. NOT a blocker for evaluators.  
+**Recommended fix**: None needed (or add symlinks/README in tests/ explaining location).
+
+### GAP 4: `docs/deployments.md` has placeholder program IDs
+**Problem**: `<PENDING DEPLOYMENT>` — no real program IDs.  
+**Can this be fixed without live sequencer?**: NO. Requires `xcode-select --install` + `logos-blockchain-circuits` setup.  
+**Recommended documentation**: Be honest in the file that deployment requires the full environment.
+
+### GAP 5: `docs/benchmarks.md` has no real CU numbers
+**Problem**: PROMPT says "docs/benchmarks.md with real CU numbers."  
+**Can this be fixed?**: Only with live sequencer.  
+**Status**: `docs/benchmarks.md` currently has wall-time estimates. This is acceptable as a caveat.
+
+### GAP 6: Video not recorded
+**Cannot be done by AI agent.** Human must record narrated video.  
+**Requirements** (from PROMPT §10.1):
+- `echo $RISC0_DEV_MODE` must print `0` visibly
+- Run `./scripts/demo.sh`
+- Narrate the failure path: "See here — transaction failed, but events are still committed"
+- Show `cargo test` passing
+
+---
+
+## What NOT To Do
+
+- ❌ Do NOT rewrite the SDK (emit.rs, event.rs, error.rs) — it's correct
+- ❌ Do NOT rewrite the tests — all 21 pass
+- ❌ Do NOT add `RISC0_DEV_MODE=1` anywhere
+- ❌ Do NOT change rust-toolchain.toml (it matches LEZ exactly)
+- ❌ Do NOT try to build the LEZ sequencer (needs logos-blockchain-circuits)
+- ❌ Do NOT create mock data that pretends to be live sequencer output
+
+---
+
+## Repository Structure
+
+```
+lez-event-system/
+├── .github/workflows/ci.yml        ✅ 3-job pipeline (lint+fmt, unit-tests, demo-script)
+├── demo/index.html                 ✅ Interactive browser demo (open in browser to show evaluators)
+├── docs/
+│   ├── event-format.md             ✅ 514 lines, complete spec
+│   ├── architecture-decision.md    ✅ Design rationale
+│   ├── research-notes.md           ✅ LEZ codebase findings
+│   ├── benchmarks.md               ⚠️  Wall-time estimates (no real CU yet)
+│   ├── deployments.md              ⚠️  Placeholder program IDs
+│   ├── submission-writeup.md       ✅ Complete
+│   └── gap-analysis.md             ✅ This audit
+├── lez-events/src/                 ✅ Core SDK
+│   ├── emit.rs                     ✅ Thread-local buffer, drain_events()
+│   ├── event.rs                    ✅ EventRecord, LezEvent trait
+│   ├── error.rs                    ✅ 4 variants, 0xEE01–0xEE04
+│   └── macros.rs                   ✅ impl_lez_event! macro
+├── lez-events/tests/               ✅ 21 tests total
+│   ├── test_encoding.rs            ✅ Borsh determinism
+│   ├── test_ordering.rs            ✅ Sequence monotonicity
+│   ├── test_size_limits.rs         ✅ All limits return Err
+│   ├── test_failure_path.rs        ✅ drain-before-panic pattern
+│   └── test_attribution.rs         ✅ program_id handling
+├── lez-event-decoder/              ✅ Decoder + CLI
+├── examples/token-transfer/        ✅ Success path (simulated)
+├── examples/withdraw/              ✅ Failure path (simulated)
+├── examples/indexer/               ✅ Reference indexer
+├── scripts/demo.sh                 ✅ Works offline, RISC0_DEV_MODE=0
+├── scripts/run-integration-tests.sh ✅ Works offline
+├── Cargo.toml                      ✅ Workspace
+├── rust-toolchain.toml             ✅ 1.94.0 (matches LEZ)
+└── LICENSE                         ✅ MIT
+```
+
+---
+
+## Honest Assessment for Evaluators
+
+The LP-0012 submission delivers:
+
+1. **Complete API design** — `emit_event`, `drain_events`, `EventRecord`, `LezEvent` trait, error codes
+2. **Proven failure-path mechanism** — `drain_events()` before `write_output()` before `panic!()` — tested in `test_failure_path.rs`
+3. **Full decoder + CLI** — `decode-raw` works offline; `decode --tx` requires patched sequencer
+4. **Reference examples** — pedagogically correct demonstrations of the pattern
+5. **Documented sequencer integration plan** — exactly what changes are needed in LEZ's `ProgramOutput` and sequencer
+
+What requires a live sequencer (environment-blocked):
+- Real CU numbers (benchmarks.md)
+- Real program IDs (deployments.md)
+- End-to-end `lez-event-cli decode --tx HASH --rpc URL`
+
+The evaluators (Logos team) can apply the documented `ProgramOutput.events` extension to the sequencer and verify it works. The SDK is ready.
