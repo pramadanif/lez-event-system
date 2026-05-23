@@ -75,7 +75,7 @@ Our current approach: We drain events and print them BEFORE panicking. This work
 - [x] test_size_limits.rs ✅
 - [x] test_failure_path.rs ✅
 - [x] test_attribution.rs ✅
-- [ ] tests/ directory at repo root is EMPTY — PROMPT expects tests at top level
+- [x] tests/ directory at repo root has full integration test suite (`cargo test --test integration`)
 
 ### Phase 8 ✅ MOSTLY COMPLETE
 - [x] .github/workflows/ci.yml
@@ -96,8 +96,8 @@ Our current approach: We drain events and print them BEFORE panicking. This work
 ### Issue 1: cargo fmt not clean ✅ FIXED NOW
 Files had formatting issues. `cargo fmt --all` was run and fixed.
 
-### Issue 2: Empty tests/ directory
-The PROMPT's directory structure shows `tests/` at repo root. Tests are in `lez-events/tests/`. This is fine for Rust but the PROMPT shows standalone test files. 
+### Issue 2: Empty tests/ directory ✅ FIXED NOW
+The PROMPT's directory structure shows `tests/` at repo root. Added a dedicated `integration-tests` crate that maps to `tests/integration.rs`, which runs end-to-end pipeline tests.
 
 ### Issue 3: CI integration tests will fail on GitHub Actions
 The CI workflow has an `integration-tests` job that tries to clone `logos-blockchain/logos-execution-zone` and build it, which requires `logos-blockchain-circuits` — a private/large dependency not available in clean CI environments.
