@@ -1,5 +1,7 @@
 # LEZ Event System (LP-0012)
 
+### 🎥 [Watch the Video Demo on YouTube](https://youtu.be/qmyBhWTii6Y)
+
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](#evaluators-quickstart)
 [![Tests](https://img.shields.io/badge/tests-27%2F27%20passing-brightgreen)](#test-results)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen)](#code-quality)
@@ -12,6 +14,39 @@
 ## Executive Summary
 
 The **LEZ Event System** solves a critical problem in the RISC0 zkVM environment: when a transaction panics, developers have no visibility into the failure reason because the journal is discarded. This SDK introduces an elegant `emit_event` / `drain_events` pattern that ensures events survive transaction panics by committing them to the Risc0 journal *before* the panic occurs. The result is a production-ready, fully-tested SDK that enables structured, debuggable transaction feedback for LEZ programs—similar to Solana's event system and Cosmos SDK ABCI events.
+
+### Architecture Flow: "Drain-before-Panic" Pattern
+
+The following diagram illustrates how the SDK successfully rescues events during a transaction failure within the strict ZK environment:
+
+```mermaid
+sequenceDiagram
+    participant Tx as Transaction Execution
+    participant Buffer as Thread-Local Event Buffer
+    participant Output as ProgramOutput (Journal)
+    participant State as Blockchain State
+
+    Note over Tx,State: Standard Event Emission
+    Tx->>Buffer: emit_event(TransferInitiated)
+    Buffer-->>Tx: Ok(())
+    
+    Note over Tx,State: Failure Path Scenario (e.g. Insufficient Funds)
+    Tx->>Buffer: emit_event(WithdrawAttempted)
+    Buffer-->>Tx: Ok(())
+    Tx->>Tx: Detects Error (Insufficient Funds)
+    
+    Note over Tx,Output: ⚡ CRITICAL: Drain Before Panic ⚡
+    Tx->>Buffer: drain_events()
+    Buffer-->>Tx: Vec<EventRecord>
+    Tx->>Output: with_events(events).write()
+    Output-->>Tx: Sealed in RISC0 Journal
+    
+    Note over Tx,State: Transaction Reversion
+    Tx->>Tx: panic!("Insufficient Funds")
+    Tx-xState: State Changes Reverted
+    
+    Note over Output: Events Survived! Output remains verifiable.
+```
 
 ---
 
@@ -445,7 +480,7 @@ lez-event-system/
 
 ## Video Demo
 
-**[Link to Video Demo](INSERT_VIDEO_LINK_HERE)**
+**[🎥 Watch the E2E Demo on YouTube](https://youtu.be/qmyBhWTii6Y)**
 
 The video demonstrates:
 1. Walkthrough of [docs/event-format.md](docs/event-format.md)
