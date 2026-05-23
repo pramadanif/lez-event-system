@@ -86,11 +86,11 @@ cat examples/withdraw/src/main.rs | grep -A 20 "if instr.balance"
 #   "Let's run the full test suite. All tests run with RISC0_DEV_MODE=0."
 
 # [TYPE]:
-cargo test --workspace 2>&1 | tail -20
-# [SHOW: 21 tests passing]
+cargo test --workspace
+# [SHOW: 27 tests passing]
 
 # [NARRATE]:
-#   "21 tests, all passing. Let me highlight the most important ones:
+#   "27 tests, all passing. Let me highlight the most important ones:
 #    `test_failure_path.rs` — these tests simulate the drain-before-panic
 #    pattern and prove that events are preserved even when the transaction panics.
 #
@@ -291,7 +291,7 @@ wc -l docs/*.md
 #    LEZ programs. By calling drain_events() BEFORE any potential panic,
 #    events are committed to the RISC0 journal and survive transaction failure.
 #
-#    The SDK is production-ready: 21 tests pass, zero clippy warnings,
+#    The SDK is production-ready: 27 tests pass, zero clippy warnings,
 #    clean formatting, and the demo script runs successfully in a clean
 #    environment with RISC0_DEV_MODE=0.
 #
@@ -304,7 +304,7 @@ wc -l docs/*.md
 # ============================================================
 # [ ] Video clearly shows "RISC0_DEV_MODE=0" at the start
 # [ ] Demo script failure path narrated: events survive panic
-# [ ] All 21 tests shown passing
+# [ ] All 27 tests shown passing
 # [ ] Clippy zero warnings shown
 # [ ] Upload to YouTube/Loom unlisted, submit URL
 # [ ] Include video URL in docs/submission-writeup.md
