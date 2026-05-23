@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{
-    event::{LezEvent, MAX_EVENT_PAYLOAD_BYTES, MAX_EVENTS_PER_TX, MAX_TOTAL_EVENT_BYTES},
+    event::{LezEvent, MAX_EVENTS_PER_TX, MAX_EVENT_PAYLOAD_BYTES, MAX_TOTAL_EVENT_BYTES},
     EventError, EventRecord,
 };
 

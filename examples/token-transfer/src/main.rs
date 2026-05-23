@@ -113,5 +113,8 @@ fn main() {
     // 5. Write output (events are committed here)
     write_outputs(events);
 
-    println!("Transfer of {} tokens completed successfully.", instr.amount);
+    println!(
+        "Transfer of {} tokens completed successfully.",
+        instr.amount
+    );
 }

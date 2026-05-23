@@ -76,8 +76,14 @@ fn events_preserved_before_panic() {
 #[test]
 fn failed_tx_events_have_correct_discriminants() {
     let (events, _) = simulate_failed_withdraw(1_000, 0);
-    assert_eq!(events[0].discriminant, 0x0010, "first event = WithdrawAttempted");
-    assert_eq!(events[1].discriminant, 0x0011, "second event = InsufficientFunds");
+    assert_eq!(
+        events[0].discriminant, 0x0010,
+        "first event = WithdrawAttempted"
+    );
+    assert_eq!(
+        events[1].discriminant, 0x0011,
+        "second event = InsufficientFunds"
+    );
 }
 
 #[test]

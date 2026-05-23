@@ -29,7 +29,10 @@ fn round_trip_encode_decode() {
     let original = make_record(7, 0xDEAD, b"test payload");
     let bytes = borsh::to_vec(&original).unwrap();
     let decoded = EventRecord::deserialize(&mut &bytes[..]).unwrap();
-    assert_eq!(original, decoded, "round-trip must produce identical struct");
+    assert_eq!(
+        original, decoded,
+        "round-trip must produce identical struct"
+    );
 }
 
 #[test]

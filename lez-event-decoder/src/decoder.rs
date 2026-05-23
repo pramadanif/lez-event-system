@@ -50,7 +50,9 @@ pub fn decode_event(record: &EventRecord, schemas: &[EventSchema]) -> DecodedEve
     let program_id = format!("0x{}", hex::encode(record.program_id));
     let raw_payload_hex = hex::encode(&record.payload);
 
-    let schema = schemas.iter().find(|s| s.discriminant == record.discriminant);
+    let schema = schemas
+        .iter()
+        .find(|s| s.discriminant == record.discriminant);
 
     let (event_name, fields) = match schema {
         None => (

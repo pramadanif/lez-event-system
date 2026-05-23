@@ -187,8 +187,7 @@ async fn cmd_watch(program_filter: Option<&str>, rpc: &str, interval_secs: u64) 
                 let block_num = json["block_number"].as_u64().unwrap_or(last_seen_block);
                 if block_num > last_seen_block {
                     for b in (last_seen_block + 1)..=block_num {
-                        let txs_url =
-                            format!("{}/block/{}/txs", rpc.trim_end_matches('/'), b);
+                        let txs_url = format!("{}/block/{}/txs", rpc.trim_end_matches('/'), b);
                         if let Ok(r) = reqwest::get(&txs_url).await {
                             if let Ok(tx_list) = r.json::<Vec<String>>().await {
                                 for tx_hash in tx_list {
@@ -196,9 +195,9 @@ async fn cmd_watch(program_filter: Option<&str>, rpc: &str, interval_secs: u64) 
                                         let mut records: Vec<EventRecord> = Vec::new();
                                         for raw in &receipt.events {
                                             if let Ok(bytes) = hex_decode(&raw.borsh_hex) {
-                                                if let Ok(r) = EventRecord::deserialize(
-                                                    &mut &bytes[..],
-                                                ) {
+                                                if let Ok(r) =
+                                                    EventRecord::deserialize(&mut &bytes[..])
+                                                {
                                                     records.push(r);
                                                 }
                                             }
@@ -213,9 +212,7 @@ async fn cmd_watch(program_filter: Option<&str>, rpc: &str, interval_secs: u64) 
                                             })
                                             .collect();
                                         if !filtered.is_empty() {
-                                            println!(
-                                                "[block={b}] [tx={tx_hash}]"
-                                            );
+                                            println!("[block={b}] [tx={tx_hash}]");
                                             for r in filtered {
                                                 let mut d = decode_event(r, &schemas);
                                                 d.from_failed_tx = !receipt.success;
@@ -237,7 +234,10 @@ async fn cmd_watch(program_filter: Option<&str>, rpc: &str, interval_secs: u64) 
 
 async fn fetch_receipt(rpc: &str, tx: &str) -> Result<TxReceiptResponse> {
     let url = format!("{}/tx/{}", rpc.trim_end_matches('/'), tx);
-    let r = reqwest::get(&url).await?.json::<TxReceiptResponse>().await?;
+    let r = reqwest::get(&url)
+        .await?
+        .json::<TxReceiptResponse>()
+        .await?;
     Ok(r)
 }
 
@@ -251,9 +251,7 @@ async fn main() {
 
     let result = match &cli.command {
         Commands::Decode { tx, rpc, format } => cmd_decode(tx, rpc, format).await,
-        Commands::DecodeRaw { hex, file } => {
-            cmd_decode_raw(hex.as_deref(), file.as_deref()).await
-        }
+        Commands::DecodeRaw { hex, file } => cmd_decode_raw(hex.as_deref(), file.as_deref()).await,
         Commands::Watch {
             program,
             rpc,

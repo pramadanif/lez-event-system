@@ -130,7 +130,10 @@ fn main() {
         write_outputs_failure(events);
 
         // TX FAILS HERE — journal is already sealed with both events above
-        panic!("Insufficient funds: requested {}, available {}", instr.amount, instr.balance);
+        panic!(
+            "Insufficient funds: requested {}, available {}",
+            instr.amount, instr.balance
+        );
     }
 
     // Success path

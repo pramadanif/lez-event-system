@@ -105,8 +105,7 @@ async fn main() -> Result<()> {
             };
 
             for tx_hash in tx_hashes {
-                let receipt_url =
-                    format!("{}/tx/{}", rpc.trim_end_matches('/'), &tx_hash);
+                let receipt_url = format!("{}/tx/{}", rpc.trim_end_matches('/'), &tx_hash);
                 let receipt: TxReceipt = match fetch_json(&receipt_url).await {
                     Ok(r) => r,
                     Err(e) => {

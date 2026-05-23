@@ -5,8 +5,8 @@
 
 use borsh::BorshSerialize;
 use lez_events::{
-    clear_events, emit_event, impl_lez_event, EventError, MAX_EVENT_PAYLOAD_BYTES,
-    MAX_EVENTS_PER_TX,
+    clear_events, emit_event, impl_lez_event, EventError, MAX_EVENTS_PER_TX,
+    MAX_EVENT_PAYLOAD_BYTES,
 };
 
 // ---------------------------------------------------------------------------
