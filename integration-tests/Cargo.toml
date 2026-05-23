@@ -1,0 +1,15 @@
+[package]
+name = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+lez-events = { path = "../lez-events" }
+lez-event-decoder = { path = "../lez-event-decoder" }
+borsh = { workspace = true }
+serde_json = { workspace = true }
+
+[[test]]
+name = "integration"
+path = "../tests/integration.rs"
