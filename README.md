@@ -15,6 +15,16 @@ The **LEZ Event System** solves a critical problem in the RISC0 zkVM environment
 
 ---
 
+## Prerequisites
+
+Before evaluating the repository, ensure you have the following installed:
+1. **Rust & Cargo**: Install via [rustup.rs](https://rustup.rs/). (The repository includes a `rust-toolchain.toml` pinned to `1.94.0`, so Cargo will automatically use the correct version).
+2. **Git**: To clone the repository.
+
+*Note: You do NOT need the `logos-blockchain-circuits` or the live LEZ sequencer to run the test suite, verify the architecture, or use the CLI decoder in offline mode.*
+
+---
+
 ## Evaluator's Quickstart
 
 Clone the repository and run these commands in a clean environment to verify all core functionality immediately:
@@ -131,24 +141,31 @@ cargo fmt --check --all
 - **[Research Notes](docs/research-notes.md)** — Pre-implementation analysis of LEZ architecture and design constraints
 - **[Deployments](docs/deployments.md)** — Testnet deployment guide and status
 
-### CLI Tool
+### CLI Tool Installation & Usage
 - **lez-event-cli**: [`lez-event-decoder/src/bin/`](lez-event-decoder/src/bin/)
-  ```bash
-  # Decode from hex (offline, no sequencer needed)
-  lez-event-cli decode-raw --hex <BORSH_HEX>
+
+You can install the CLI globally to try it out:
+```bash
+cargo install --path lez-event-decoder
+```
+
+Or run it directly from the source:
+```bash
+# Decode from hex (offline, no sequencer needed)
+cargo run -p lez-event-decoder -- decode-raw --hex <BORSH_HEX>
   
-  # Decode from binary file
-  lez-event-cli decode-raw --file events.bin
+# Decode from binary file
+cargo run -p lez-event-decoder -- decode-raw --file events.bin
   
-  # Decode from live RPC (requires sequencer)
-  lez-event-cli decode --tx <TX_HASH> --rpc http://localhost:8080
+# Decode from live RPC (requires sequencer)
+cargo run -p lez-event-decoder -- decode --tx <TX_HASH> --rpc http://localhost:8080
   
-  # JSON output
-  lez-event-cli decode --tx <TX_HASH> --rpc http://localhost:8080 --format json
+# JSON output
+cargo run -p lez-event-decoder -- decode --tx <TX_HASH> --rpc http://localhost:8080 --format json
   
-  # Real-time event monitoring
-  lez-event-cli watch --rpc http://localhost:8080
-  ```
+# Real-time event monitoring
+cargo run -p lez-event-decoder -- watch --rpc http://localhost:8080
+```
 
 ### Interactive Web Demo
 - **demo/index.html** — Serverless web UI demonstrating event architecture and Borsh hex encoding/decoding (browser-based, no backend required)
