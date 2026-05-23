@@ -77,7 +77,14 @@ fn full_pipeline_failure_path() {
     clear_events();
     let pid = any_pid();
 
-    emit_event(pid, WithdrawFail { requested: 2_000, available: 500 }).expect("emit fail");
+    emit_event(
+        pid,
+        WithdrawFail {
+            requested: 2_000,
+            available: 500,
+        },
+    )
+    .expect("emit fail");
 
     // CRITICAL: drain before panic
     let events = drain_events();
@@ -106,7 +113,15 @@ fn decoder_handles_unknown_discriminant() {
     let pid = any_pid();
 
     // Emit a Transfer event
-    emit_event(pid, Transfer { from: [0u8; 32], to: [0u8; 32], amount: 42 }).expect("emit");
+    emit_event(
+        pid,
+        Transfer {
+            from: [0u8; 32],
+            to: [0u8; 32],
+            amount: 42,
+        },
+    )
+    .expect("emit");
     let events = drain_events();
     assert_eq!(events.len(), 1);
 
@@ -120,7 +135,10 @@ fn decoder_handles_unknown_discriminant() {
         "graceful fallback: got '{}'",
         ev.event_name
     );
-    assert!(!ev.raw_payload_hex.is_empty(), "raw_payload_hex must be present");
+    assert!(
+        !ev.raw_payload_hex.is_empty(),
+        "raw_payload_hex must be present"
+    );
 
     // JSON must be valid
     let json = to_json(&ev);
@@ -134,7 +152,11 @@ fn borsh_encoding_is_deterministic() {
         clear_events();
         emit_event(
             any_pid(),
-            Transfer { from: [0x01u8; 32], to: [0x02u8; 32], amount: 100 },
+            Transfer {
+                from: [0x01u8; 32],
+                to: [0x02u8; 32],
+                amount: 100,
+            },
         )
         .unwrap();
         let events = drain_events();
@@ -150,7 +172,11 @@ fn multi_event_ordering_preserved() {
     for i in 0..5u64 {
         emit_event(
             any_pid(),
-            Transfer { from: [0u8; 32], to: [i as u8; 32], amount: i },
+            Transfer {
+                from: [0u8; 32],
+                to: [i as u8; 32],
+                amount: i,
+            },
         )
         .unwrap();
     }
@@ -176,7 +202,9 @@ fn emit_returns_err_on_oversized_payload() {
     clear_events();
     let result = emit_event(
         any_pid(),
-        BigPayload { data: vec![0u8; 2048] }, // over 1024 limit
+        BigPayload {
+            data: vec![0u8; 2048],
+        }, // over 1024 limit
     );
     assert!(result.is_err(), "oversized payload must return Err");
     let code = result.unwrap_err().error_code();
