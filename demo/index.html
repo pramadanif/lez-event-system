@@ -831,7 +831,22 @@ const EXAMPLES = {
     const all = [0x4c, 0x45, 0x5a, 0x45, 0x01, 2,0,0,0,...r1,...r2];
     return all.map(b=>b.toString(16).padStart(2,'0')).join('');
   })(),
-  raw: '010000000000000000000000000000000000000000000000000000000000000000000000000100000000000000010500000068656c6c6f',
+  raw: (() => {
+    const toLE4 = n => [n&0xff,(n>>8)&0xff,(n>>16)&0xff,(n>>24)&0xff];
+    const rec = (seq, disc, sv, payload) => [
+      ...Array(32).fill(0x00), // program_id
+      ...toLE4(seq),
+      disc, 0,0,0,0,0,0,0, // discriminant 8B LE
+      sv, // schema_version
+      ...Array(32).fill(0x00), // schema_hash
+      ...toLE4(payload.length),
+      ...payload
+    ];
+    const p1 = [0x68,0x65,0x6c,0x6c,0x6f]; // "hello"
+    const r1 = rec(0, 0x01, 1, p1);
+    const all = [0x4c, 0x45, 0x5a, 0x45, 0x01, 1,0,0,0,...r1];
+    return all.map(b=>b.toString(16).padStart(2,'0')).join('');
+  })(),
 };
 
 function loadExample(name) {
