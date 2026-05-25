@@ -56,10 +56,9 @@ ls -1
 # [SHOW: lez-events/, lez-event-decoder/, examples/, scripts/, docs/]
 
 # [NARRATE]:
-#   "The SDK lives in `lez-events/`. The key API is two functions:
-#    emit_event() — which buffers an event in a thread-local Vec,
-#    and drain_events() — which returns all buffered events for
-#    inclusion in the program output.
+#   "The SDK lives in `lez-events/`. The key API is the runtime adapter:
+#    execute_program() — which wraps your application logic and automatically
+#    handles buffering, framing, and journal commits under the hood.
 #
 #    Let me show you the failure-path pattern in the withdraw example."
 
@@ -69,12 +68,12 @@ cat examples/withdraw/src/main.rs | grep -A 20 "if instr.balance"
 
 # [NARRATE]:
 #   "See this sequence: we emit the InsufficientFunds event,
-#    then IMMEDIATELY drain and write the events to the program output
-#    BEFORE we call panic!().
+#    and then we call panic!(). But because we are running inside the
+#    execute_program wrapper, the panic is caught!
 #
-#    This is the key insight: in RISC0, the journal is sealed when
-#    write_output() is called. By draining BEFORE panic, the events
-#    are immortalized in the journal even though the transaction fails."
+#    This is the key insight: the adapter drains the events, frames them
+#    with the LEZE magic bytes, seals the RISC0 journal, and THEN resumes
+#    the panic. The events are immortalized even though the transaction fails."
 
 # [PAUSE]
 
@@ -90,9 +89,9 @@ cargo test --workspace
 # [SHOW: 27 tests passing]
 
 # [NARRATE]:
-#   "27 tests, all passing. Let me highlight the most important ones:
-#    `test_failure_path.rs` — these tests simulate the drain-before-panic
-#    pattern and prove that events are preserved even when the transaction panics.
+#   "32 tests, all passing. Let me highlight the most important ones:
+#    `test_failure_path.rs` — these tests simulate the runtime adapter
+#    catching panics and prove that events are preserved.
 #
 #    `test_size_limits.rs` — verifies that emit_event() never panics,
 #    it always returns Err with a stable error code when limits are exceeded.
@@ -122,8 +121,8 @@ RISC0_DEV_MODE=0 ./scripts/demo.sh
 #    We're submitting a withdraw for 2000 tokens, but the balance is only 500.
 #
 #    Watch what happens: the program emits WithdrawAttempted, then
-#    InsufficientFunds, then IMMEDIATELY drains and writes the output—
-#    and THEN panics.
+#    InsufficientFunds, and then PANICS. The runtime adapter catches it,
+#    flushes the LEZE frame to the journal, and resumes the abort.
 #
 #    The output shows 'events committed: 2' — both events are in the
 #    program output even though the transaction is about to fail.
@@ -161,11 +160,12 @@ cat lez-events/src/event.rs | head -30
 # [SHOW: EventRecord fields with comments]
 
 # [NARRATE]:
-#   "EventRecord has 5 fields:
+#    EventRecord has 6 fields:
 #    - program_id: set by the sequencer, not the program — prevents spoofing
 #    - sequence: 0-indexed, monotonically increasing per transaction
 #    - discriminant: stable u64 identifier for the event type
 #    - schema_version: for forward compatibility, starts at 1
+#    - schema_hash: 32-byte cryptographic hash of the schema to ensure deterministic decoding
 #    - payload: Borsh-encoded event fields, max 1024 bytes"
 
 # [PAUSE]
@@ -215,18 +215,20 @@ cargo build --release --bin lez-event-cli 2>&1 | tail -1
 #    Let's decode-raw a withdrawal failure receipt."
 
 # [TYPE]:
-HEX="02000000"
-HEX+="cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+HEX="4c455a450102000000"
+HEX+="0303030303030303030303030303030303030303030303030303030303030303"
 HEX+="00000000"
 HEX+="1000000000000000"
 HEX+="01"
+HEX+="0000000000000000000000000000000000000000000000000000000000000000"
 HEX+="28000000"
 HEX+="0303030303030303030303030303030303030303030303030303030303030303"
 HEX+="d007000000000000"
-HEX+="cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+HEX+="0303030303030303030303030303030303030303030303030303030303030303"
 HEX+="01000000"
 HEX+="1100000000000000"
 HEX+="01"
+HEX+="0000000000000000000000000000000000000000000000000000000000000000"
 HEX+="30000000"
 HEX+="0303030303030303030303030303030303030303030303030303030303030303"
 HEX+="d007000000000000"
@@ -252,8 +254,8 @@ ls docs/
 #   "event-format.md — 514-line Borsh wire format spec with hex examples,
 #    schema versioning strategy, privacy considerations, and size limits.
 #
-#    architecture-decision.md — explains why we chose the drain-before-panic
-#    approach and exactly what sequencer changes are needed.
+#    architecture-decision.md — explains why we chose the execute_program
+#    runtime adapter approach and exactly what sequencer changes are needed.
 #
 #    research-notes.md — our findings from studying the LEZ codebase before
 #    designing anything.
@@ -287,11 +289,11 @@ wc -l docs/*.md
 # [NARRATE]:
 #   "To summarize LP-0012:
 #
-#    The LEZ Event System provides emit_event() and drain_events() for
-#    LEZ programs. By calling drain_events() BEFORE any potential panic,
-#    events are committed to the RISC0 journal and survive transaction failure.
+#    The LEZ Event System provides a runtime adapter: execute_program().
+#    By wrapping your logic inside it, events are automatically framed with
+#    LEZE bytes and committed to the RISC0 journal, surviving any panics.
 #
-#    The SDK is production-ready: 27 tests pass, zero clippy warnings,
+#    The SDK is production-ready: 32 tests pass, zero clippy warnings,
 #    clean formatting, and the demo script runs successfully in a clean
 #    environment with RISC0_DEV_MODE=0.
 #
@@ -304,7 +306,7 @@ wc -l docs/*.md
 # ============================================================
 # [ ] Video clearly shows "RISC0_DEV_MODE=0" at the start
 # [ ] Demo script failure path narrated: events survive panic
-# [ ] All 27 tests shown passing
+# [ ] All 32 tests shown passing
 # [ ] Clippy zero warnings shown
 # [ ] Upload to YouTube/Loom unlisted, submit URL
 # [ ] Include video URL in docs/submission-writeup.md

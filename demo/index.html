@@ -371,8 +371,8 @@
         <div class="flow-step highlighted">
           <div class="flow-num step-blue">3</div>
           <div class="flow-content">
-            <div class="fn-name">drain_events() + write_output()</div>
-            <div class="fn-desc">→ events sealed in RISC0 journal</div>
+            <div class="fn-name">execute_program()</div>
+            <div class="fn-desc">→ events sealed in RISC0 journal via LEZE frame</div>
           </div>
           <span class="flow-tag tag-preserved">COMMITTED</span>
         </div>
@@ -410,8 +410,8 @@
         <div class="flow-step highlighted">
           <div class="flow-num step-blue">3</div>
           <div class="flow-content">
-            <div class="fn-name">drain_events() + write_output()</div>
-            <div class="fn-desc">→ RISC0 journal sealed HERE</div>
+            <div class="fn-name">execute_program()</div>
+            <div class="fn-desc">→ adapter catches panic, frames events, seals journal</div>
           </div>
           <span class="flow-tag tag-critical">CRITICAL</span>
         </div>
@@ -463,7 +463,7 @@
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('emit')">emit_event</button>
-    <button class="tab-btn" onclick="switchTab('drain')">drain_events</button>
+    <button class="tab-btn" onclick="switchTab('execute')">execute_program</button>
     <button class="tab-btn" onclick="switchTab('macro')">impl_lez_event!</button>
     <button class="tab-btn" onclick="switchTab('error')">Error Codes</button>
   </div>
@@ -489,17 +489,18 @@
 <span class="cmt">// → Borsh serialization fail (0xEE04)</span></div>
   </div>
 
-  <div class="tab-content" id="tab-drain">
-    <div class="code-block"><span class="cmt">// Drain all buffered events — MUST be called before write_output()</span>
-<span class="kw">pub fn</span> <span class="fn">drain_events</span>() -> <span class="type">Vec</span>&lt;<span class="type">EventRecord</span>&gt; { ... }
+  <div class="tab-content" id="tab-execute">
+    <div class="code-block"><span class="cmt">// Runtime adapter — catches panics to flush events</span>
+<span class="kw">pub fn</span> <span class="fn">execute_program</span>&lt;F, R&gt;(f: F) -> R { ... }
 
 <span class="cmt">// CRITICAL PATTERN — the only way to preserve events through a panic:</span>
-<span class="kw">let</span> events = <span class="fn">drain_events</span>();        <span class="cmt">// 1. drain first</span>
-<span class="type">ProgramOutput</span>::<span class="fn">new</span>(...)             <span class="cmt">// 2. create output</span>
-    .<span class="fn">with_events</span>(events)             <span class="cmt">// 3. attach events</span>
-    .<span class="fn">write</span>();                         <span class="cmt">// 4. commit to RISC0 journal</span>
-<span class="mac">panic!</span>(<span class="str">"Transaction failed"</span>);         <span class="cmt">// 5. now panic safely</span>
-<span class="cmt">// Journal is already sealed — events are in TxReceipt.events</span></div>
+<span class="fn">execute_program</span>(|| {
+    <span class="kw">let</span> amount = <span class="num">2000</span>;
+    <span class="fn">emit_event</span>(program_id, <span class="type">WithdrawAttempted</span> { amount })<span class="fn">.unwrap</span>();
+    
+    <span class="mac">panic!</span>(<span class="str">"Transaction failed"</span>);         <span class="cmt">// Adapter catches this panic!</span>
+    <span class="cmt">// Adapter drains events, creates LEZE frame, seals journal, then resumes panic.</span>
+});</div>
   </div>
 
   <div class="tab-content" id="tab-macro">
@@ -639,8 +640,10 @@ function buildHexDisplay() {
   // payload: account([0x03;32]=32B) + requested(u64 LE 2000) + available(u64 LE 500)
   const bytes = [];
 
+  // LEZE Frame (4B) + Version (1B)
+  const LEZE = [0x4C, 0x45, 0x5A, 0x45, 0x01];
   // Vec<EventRecord> length = 1 (4 bytes LE)
-  const COUNT = [[1,0,0,0]];
+  const COUNT = [1,0,0,0];
   // program_id = [0xCD; 32]
   const PROG_ID = Array(32).fill(0xCD);
   // sequence = 1 (4 bytes LE)
@@ -649,6 +652,8 @@ function buildHexDisplay() {
   const DISC = [0x11,0x00,0,0,0,0,0,0];
   // schema_version = 1 (1 byte)
   const SV = [1];
+  // schema_hash = [0x00; 32]
+  const SH = Array(32).fill(0x00);
   // payload: [0x03;32] + 2000u64 LE + 500u64 LE = 48 bytes
   const payload = [
     ...Array(32).fill(0x03),
@@ -659,11 +664,13 @@ function buildHexDisplay() {
   const PAYLOAD_LEN = [payload.length, 0, 0, 0];
 
   const segments = [
-    { bytes: [1,0,0,0], cls: 'hb-count', title: 'Vec length = 1 (4B little-endian)' },
+    { bytes: LEZE, cls: 'hb-count', title: 'LEZE Magic Frame + Version 1 (5B)' },
+    { bytes: COUNT, cls: 'hb-count', title: 'Vec length = 1 (4B little-endian)' },
     { bytes: PROG_ID, cls: 'hb-program_id', title: 'program_id = [0xCD; 32] — overwritten by sequencer' },
     { bytes: SEQ, cls: 'hb-sequence', title: 'sequence = 1 (4B little-endian, 0-indexed)' },
     { bytes: DISC, cls: 'hb-discriminant', title: 'discriminant = 0x0011 (8B little-endian) — InsufficientFunds' },
     { bytes: SV, cls: 'hb-schema', title: 'schema_version = 1 (1 byte)' },
+    { bytes: SH, cls: 'hb-schema', title: 'schema_hash = [0x00; 32]' },
     { bytes: PAYLOAD_LEN, cls: 'hb-payload', title: 'payload length = 48 bytes (4B LE prefix)' },
     { bytes: payload.slice(0, 32), cls: 'hb-payload', title: 'payload: account = [0x03; 32]' },
     { bytes: payload.slice(32, 40), cls: 'hb-payload', title: 'payload: requested = 2000 (u64 LE)' },
@@ -719,6 +726,15 @@ function decodeEventRecords(hex) {
   hex = hex.replace(/\s/g, '').toLowerCase();
   if (!hex.match(/^[0-9a-f]+$/)) throw new Error('Invalid hex string');
   const r = new BorshReader(hex);
+  
+  // Parse LEZE frame!
+  const magic = r.readBytes(4);
+  if (magic[0] !== 0x4c || magic[1] !== 0x45 || magic[2] !== 0x5a || magic[3] !== 0x45) {
+     throw new Error("Missing LEZE magic bytes frame");
+  }
+  const version = r.readU8();
+  if (version !== 1) throw new Error("Unsupported frame version");
+
   const count = r.readU32LE();
   if (count > 64) throw new Error(`Count ${count} > MAX_EVENTS_PER_TX (64)`);
   const events = [];
@@ -727,8 +743,9 @@ function decodeEventRecords(hex) {
     const sequence = r.readU32LE();
     const discriminant = r.readU64LE();
     const schema_version = r.readU8();
+    const schema_hash = r.readBytes(32);
     const payload = r.readVecU8();
-    events.push({ program_id, sequence, discriminant, schema_version, payload });
+    events.push({ program_id, sequence, discriminant, schema_version, schema_hash, payload });
   }
   return events;
 }
@@ -785,12 +802,13 @@ const EXAMPLES = {
       ...toLE4(seq),
       disc, 0,0,0,0,0,0,0, // discriminant 8B LE
       sv, // schema_version
+      ...Array(32).fill(0x00), // schema_hash
       ...toLE4(payload.length),
       ...payload
     ];
     const r1 = rec(0, 0x01, 1, p1);
     const r2 = rec(1, 0x02, 1, p2);
-    const all = [2,0,0,0,...r1,...r2];
+    const all = [0x4c, 0x45, 0x5a, 0x45, 0x01, 2,0,0,0,...r1,...r2];
     return all.map(b=>b.toString(16).padStart(2,'0')).join('');
   })(),
   // 2 events: WithdrawAttempted + InsufficientFunds (failure path)
@@ -800,16 +818,17 @@ const EXAMPLES = {
     const p2 = [...acct, 0xD0,0x07,0,0,0,0,0,0, 0xF4,0x01,0,0,0,0,0,0]; // + available(500)
     const toLE4 = n => [n&0xff,(n>>8)&0xff,(n>>16)&0xff,(n>>24)&0xff];
     const rec = (seq, disc, sv, payload) => [
-      ...Array(32).fill(0xCD), // program_id
+      ...Array(32).fill(0x03), // program_id
       ...toLE4(seq),
-      disc, 0,0,0,0,0,0,0,
-      sv,
+      disc, 0,0,0,0,0,0,0, // discriminant 8B LE
+      sv, // schema_version
+      ...Array(32).fill(0x00), // schema_hash
       ...toLE4(payload.length),
       ...payload
     ];
     const r1 = rec(0, 0x10, 1, p1);
     const r2 = rec(1, 0x11, 1, p2);
-    const all = [2,0,0,0,...r1,...r2];
+    const all = [0x4c, 0x45, 0x5a, 0x45, 0x01, 2,0,0,0,...r1,...r2];
     return all.map(b=>b.toString(16).padStart(2,'0')).join('');
   })(),
   raw: '010000000000000000000000000000000000000000000000000000000000000000000000000100000000000000010500000068656c6c6f',

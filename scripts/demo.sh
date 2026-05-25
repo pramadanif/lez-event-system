@@ -55,7 +55,7 @@ echo ""
 echo "[4/7] Demo: Failure path — withdraw with insufficient funds"
 echo "  >>> Submitting transaction that WILL FAIL (balance < requested) <<<"
 echo "  Demonstrates: emit WithdrawAttempted → emit InsufficientFunds"
-echo "                → drain_events() + write output BEFORE panic"
+echo "                → execute_program catches panic + flushes frame BEFORE abort"
 echo "                → panic!() — state fails, but events are preserved in journal"
 echo ""
 cargo run --quiet --release --package withdraw-example 2>&1 || true
