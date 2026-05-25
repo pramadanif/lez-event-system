@@ -9,6 +9,7 @@ fn make_record(sequence: u32, discriminant: u64, payload: &[u8]) -> EventRecord 
         sequence,
         discriminant,
         schema_version: 1,
+        schema_hash: [0u8; 32],
         payload: payload.to_vec(),
     }
 }
@@ -55,6 +56,7 @@ fn field_order_matches_spec() {
         sequence: 1u32,
         discriminant: 0x00000000_0000FFFFu64,
         schema_version: 1u8,
+        schema_hash: [0xCCu8; 32],
         payload: vec![0x42u8],
     };
     let bytes = borsh::to_vec(&record).unwrap();
@@ -67,8 +69,10 @@ fn field_order_matches_spec() {
     assert_eq!(&bytes[36..44], &0x00000000_0000FFFFu64.to_le_bytes());
     // Byte 44 → schema_version = 1
     assert_eq!(bytes[44], 1u8);
-    // Bytes 45..49 → payload length = 1 (LE)
-    assert_eq!(&bytes[45..49], &1u32.to_le_bytes());
-    // Byte 49 → payload[0] = 0x42
-    assert_eq!(bytes[49], 0x42u8);
+    // Bytes 45..77 → schema_hash = [0xCCu8; 32]
+    assert_eq!(&bytes[45..77], &[0xCCu8; 32]);
+    // Bytes 77..81 → payload length = 1 (LE)
+    assert_eq!(&bytes[77..81], &1u32.to_le_bytes());
+    // Byte 81 → payload[0] = 0x42
+    assert_eq!(bytes[81], 0x42u8);
 }

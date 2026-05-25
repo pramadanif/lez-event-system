@@ -16,50 +16,61 @@ A complete structured event system for Logos Execution Zone (LEZ) programs, cons
    - `to_json()` / `to_display()` — JSON and human-readable terminal output
    - `lez-event-cli` — `decode`, `decode-raw`, `watch` subcommands
 
-3. **Example programs**
-   - `token-transfer` — success path, 2 events
-   - `withdraw` — **critical failure path**: drain → write output → panic (events preserved)
+3. **`lez-events-runtime` crate** — Runtime Adapter
+   - `execute_program` — panic-catching wrapper that automatically drains events and commits the framed journal.
+   - `parse_journal` — host-side decoder that safely extracts the `LEZE` frame before standard `ProgramOutput` parsing.
+
+4. **Example programs**
+   - `token-transfer` — success path, 2 events managed transparently by the runtime adapter
+   - `withdraw` — **critical failure path**: `execute_program` catches panic → flushes frame → resumes panic (events preserved)
    - `indexer` — reference indexer polling RPC for all tx events
 
-4. **Test suite** — 21 tests, all passing
+5. **Test suite** — 32 tests, all passing
 
-5. **CI/CD** — `.github/workflows/ci.yml` with `RISC0_DEV_MODE=0`
+6. **CI/CD** — `.github/workflows/ci.yml` with `RISC0_DEV_MODE=0`
 
 ## Architecture Overview
 
 ```
-Program                    Sequencer              Client
-───────                    ─────────              ──────
+Program                    Runtime Adapter (`execute_program`)       Sequencer/Host
+───────                    ───────────────────────────────────       ──────────────
 emit_event(ev1)
 emit_event(ev2)
   ↓
-drain_events()
-  ↓
-ProgramOutput { events, ... }
-  → env::commit()        ← Risc0 journal sealed
-  [panic() optional]     ← state reverted, journal intact
-                           ↓
-                         Extract events from journal
-                         Overwrite program_id on each event
-                           ↓
-                         TxReceipt {
-                           success: false,
-                           events: [ev1, ev2],  ← always present
-                         }
-                                                  ↓
-                                               GET /tx/{hash}
-                                               lez-event-cli decode
+[panic!("failed")!]  →     catches panic via `catch_unwind`
+                           drain_events()
+                           frame events with `LEZE` magic bytes
+                           commit_slice(&frame)                   →  RISC0 journal sealed
+                           resume_unwind(panic)
+                             ↓
+                           (Program aborts/reverts state)
+                                                                     parse_journal() slices off LEZE frame
+                                                                     events attached to TxReceipt
+                                                                     deserialize ProgramOutput
 ```
+
+## The Evolution of the Architecture (Before vs. After)
+
+### Before (SDK-Centric)
+Initially, developers were forced to manually call `drain_events()` and append them directly into `ProgramOutput::with_events(events).write()`. This was problematic because:
+1. It leaked transport logic into the developer's application code.
+2. It required an immediate, massive structural change to LEZ's core `ProgramOutput` and `TxReceipt` structs, which broke upstream compatibility.
+
+### After (Runtime Adapter)
+We moved to a **Minimally-Invasive Deterministic Framed Transport**.
+1. **Developer Experience**: Developers only call `emit_event()`. They wrap their main logic in `execute_program(|| { ... })`.
+2. **Under the Hood**: If a panic occurs, the adapter catches it, drains the buffer, prepends a deterministic `LEZE` byte-frame to the RISC0 journal, and resumes the panic.
+3. **Sequencer Integration**: The sequencer doesn't need to change `ProgramOutput`. It just runs `parse_journal` to slice off the `LEZE` frame before doing what it normally does. This minimizes the blast radius on the core team's codebase.
 
 ## Key Design Decisions
 
 ### Event Storage Mechanism (and why)
 
-**Chosen**: Extend `ProgramOutput` with an `events: Vec<EventRecord>` field.
+**Chosen**: A deterministic `LEZE` byte frame prepended to the RISC0 journal using a runtime adapter (`execute_program`).
 
-**Reasoning**: LEZ programs already write output via `env::commit(&ProgramOutput)`. Adding events to this struct means events are committed to the Risc0 journal at the same time as other output — before any potential panic. The sequencer reads the journal before reverting state, so events survive failure.
+**Reasoning**: LEZ programs write output to the RISC0 journal. By framing events at the start of the journal *before* a panic crashes the VM, we guarantee survival. By decoupling this from `ProgramOutput` structurally, we ensure that the LEZ sequencer can adopt this without rewriting core transaction primitives.
 
-**Alternative considered**: A separate `env::write()` slot for events. Rejected because it requires more Risc0 plumbing and doesn't integrate cleanly with LEZ's existing `ProgramOutput` model.
+**Alternative considered**: Adding an `events: Vec<EventRecord>` directly inside `ProgramOutput`. Rejected because it forced developers to manually manage `drain_events()` before they might panic, and required massive breaking changes to Logos Execution Zone's core structs.
 
 ### Encoding Format — Borsh (and why)
 
@@ -74,24 +85,20 @@ ProgramOutput { events, ... }
 The pattern that makes this work:
 
 ```rust
-// 1. Emit events (goes to thread-local buffer)
-emit_event(program_id, WithdrawAttempted { ... })?;
-emit_event(program_id, InsufficientFunds { ... })?;
-
-// 2. Drain and write output BEFORE panic
-//    → ProgramOutput committed to Risc0 journal here
-//    → journal is sealed and cannot be modified by a subsequent panic
-let events = drain_events();
-ProgramOutput::new(...).with_events(events).write();
-
-// 3. Panic happens AFTER journal is sealed
-panic!("Insufficient funds");
-// State changes are reverted, but events in the journal remain.
+execute_program(|| {
+    // 1. Emit events (goes to thread-local buffer)
+    emit_event(program_id, WithdrawAttempted { ... })?;
+    
+    // 2. Panic happens!
+    panic!("Insufficient funds");
+});
+// 3. UNDER THE HOOD:
+//    execute_program catches the panic, drains the buffer,
+//    frames it, commits to RISC0 journal, and resumes the panic.
+//    State changes are reverted, but events in the journal remain.
 ```
 
-The sequencer reads the journal entry before deciding to revert state. This is the same mechanism Risc0 uses for all program output — we're just piggybacking on it.
-
-**Important**: The sequencer must extract events from the journal **before** the state-reversion decision. This is documented in `docs/architecture-decision.md`.
+The sequencer reads the journal entry before deciding to revert state, slices off the `LEZE` frame using `parse_journal`, and attaches the events to the receipt.
 
 ### Size Limits — values chosen and why
 
@@ -133,7 +140,7 @@ The decoder CLI and indexer example are designed to work with public data only.
 
 ## Known Limitations
 
-1. **Sequencer integration pending**: The `events` field on `ProgramOutput` is designed but not yet merged into the LEZ sequencer. The sequencer-side code to extract events and forward them to `TxReceipt` is documented in `docs/architecture-decision.md`.
+1. **Sequencer integration pending**: The runtime integration is designed but not yet merged into the LEZ sequencer. The 3-line sequencer-side code diff to extract events is documented in `docs/runtime-integration.md`.
 
 2. **No on-chain event indexing**: Events are available via RPC receipt but not stored in any global state. An external indexer (like the provided example) is needed for querying.
 
@@ -150,7 +157,8 @@ borsh = "1.5.0"
 
 ```rust
 // In your LEZ program:
-use lez_events::{drain_events, emit_event, impl_lez_event};
+use lez_events::{emit_event, impl_lez_event};
+use lez_events_runtime::execute_program;
 use borsh::BorshSerialize;
 
 #[derive(BorshSerialize)]
@@ -158,15 +166,15 @@ pub struct MyEvent { pub value: u64 }
 impl_lez_event!(MyEvent, discriminant = 0x0001);
 
 fn main() {
-    let program_id = [/* your program id */; 32];
-    
-    emit_event(program_id, MyEvent { value: 42 }).expect("emit");
-    
-    // ALWAYS drain before write, even if you might panic
-    let events = drain_events();
-    ProgramOutput::new(/* ... */).with_events(events).write();
-    
-    // Optional: panic after write — events are preserved
+    execute_program(|| {
+        let program_id = [/* your program id */; 32];
+        
+        emit_event(program_id, MyEvent { value: 42 }).expect("emit");
+        
+        // Write standard program output here
+        
+        // Optional: panic — the runtime catches it and flushes events!
+    });
 }
 ```
 

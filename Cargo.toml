@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "lez-events",
+    "lez-events-runtime",
     "lez-event-decoder",
     "examples/token-transfer",
     "examples/withdraw",

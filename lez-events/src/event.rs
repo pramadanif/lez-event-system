@@ -19,6 +19,8 @@ pub struct EventRecord {
     pub discriminant: u64,
     /// Schema version for forward compatibility; always 1 for v1.
     pub schema_version: u8,
+    /// Cryptographic hash of the event's schema to ensure deterministic decoding capability.
+    pub schema_hash: [u8; 32],
     /// Borsh-encoded event payload; max `MAX_EVENT_PAYLOAD_BYTES`.
     pub payload: Vec<u8>,
 }
@@ -29,6 +31,7 @@ pub struct EventRecord {
 pub trait LezEvent: BorshSerialize {
     const DISCRIMINANT: u64;
     const SCHEMA_VERSION: u8 = 1;
+    const SCHEMA_HASH: [u8; 32];
 
     /// Borsh-encode `self` into the payload bytes.
     fn encode_payload(&self) -> Result<Vec<u8>, crate::EventError> {

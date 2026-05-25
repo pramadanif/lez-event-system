@@ -10,7 +10,8 @@
 //! compiled and run without a full LEZ node.
 
 use borsh::BorshSerialize;
-use lez_events::{drain_events, emit_event, impl_lez_event};
+use lez_events::{emit_event, impl_lez_event};
+use lez_events_runtime::execute_program;
 
 // ---------------------------------------------------------------------------
 // Event types
@@ -56,65 +57,47 @@ fn read_inputs() -> (TransferInstruction, [u8; 32]) {
     (instruction, program_id)
 }
 
-fn write_outputs(events: Vec<lez_events::EventRecord>) {
-    // Stub: print summary to stdout
-    println!("=== program output ===");
-    println!("events committed: {}", events.len());
-    for e in &events {
-        println!(
-            "  [seq={}] discriminant=0x{:04x} payload_len={}",
-            e.sequence,
-            e.discriminant,
-            e.payload.len()
-        );
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Main program logic — success path
 // ---------------------------------------------------------------------------
 
 fn main() {
-    let (instr, program_id) = read_inputs();
+    execute_program(|| {
+        let (instr, program_id) = read_inputs();
 
-    // 1. Emit initial event
-    emit_event(
-        program_id,
-        TransferInitiated {
-            from: instr.from,
-            to: instr.to,
-            amount: instr.amount,
-        },
-    )
-    .expect("emit TransferInitiated");
+        // 1. Emit initial event
+        emit_event(
+            program_id,
+            TransferInitiated {
+                from: instr.from,
+                to: instr.to,
+                amount: instr.amount,
+            },
+        )
+        .expect("emit TransferInitiated");
 
-    // 2. Apply transfer logic
-    assert!(
-        instr.initial_balance >= instr.amount,
-        "insufficient balance"
-    );
-    let new_balance = instr.initial_balance - instr.amount;
+        // 2. Apply transfer logic
+        assert!(
+            instr.initial_balance >= instr.amount,
+            "insufficient balance"
+        );
+        let new_balance = instr.initial_balance - instr.amount;
 
-    // 3. Emit completion event
-    emit_event(
-        program_id,
-        TransferCompleted {
-            from: instr.from,
-            to: instr.to,
-            amount: instr.amount,
-            new_sender_balance: new_balance,
-        },
-    )
-    .expect("emit TransferCompleted");
+        // 3. Emit completion event
+        emit_event(
+            program_id,
+            TransferCompleted {
+                from: instr.from,
+                to: instr.to,
+                amount: instr.amount,
+                new_sender_balance: new_balance,
+            },
+        )
+        .expect("emit TransferCompleted");
 
-    // 4. Drain events BEFORE writing output
-    let events = drain_events();
-
-    // 5. Write output (events are committed here)
-    write_outputs(events);
-
-    println!(
-        "Transfer of {} tokens completed successfully.",
-        instr.amount
-    );
+        println!(
+            "Transfer of {} tokens completed successfully.",
+            instr.amount
+        );
+    });
 }

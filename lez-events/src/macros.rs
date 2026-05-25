@@ -25,6 +25,7 @@ macro_rules! impl_lez_event {
     ($type:ty, discriminant = $disc:expr) => {
         impl $crate::LezEvent for $type {
             const DISCRIMINANT: u64 = $disc;
+            const SCHEMA_HASH: [u8; 32] = [0; 32];
         }
     };
 
@@ -32,6 +33,22 @@ macro_rules! impl_lez_event {
         impl $crate::LezEvent for $type {
             const DISCRIMINANT: u64 = $disc;
             const SCHEMA_VERSION: u8 = $ver;
+            const SCHEMA_HASH: [u8; 32] = [0; 32];
+        }
+    };
+
+    ($type:ty, discriminant = $disc:expr, schema_hash = $hash:expr) => {
+        impl $crate::LezEvent for $type {
+            const DISCRIMINANT: u64 = $disc;
+            const SCHEMA_HASH: [u8; 32] = $hash;
+        }
+    };
+
+    ($type:ty, discriminant = $disc:expr, schema_version = $ver:expr, schema_hash = $hash:expr) => {
+        impl $crate::LezEvent for $type {
+            const DISCRIMINANT: u64 = $disc;
+            const SCHEMA_VERSION: u8 = $ver;
+            const SCHEMA_HASH: [u8; 32] = $hash;
         }
     };
 }

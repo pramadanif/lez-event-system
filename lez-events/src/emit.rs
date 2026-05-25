@@ -52,6 +52,7 @@ pub fn emit_event<E: LezEvent>(program_id: [u8; 32], event: E) -> Result<(), Eve
             sequence,
             discriminant: E::DISCRIMINANT,
             schema_version: E::SCHEMA_VERSION,
+            schema_hash: E::SCHEMA_HASH,
             payload,
         });
         Ok(())
