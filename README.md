@@ -1,6 +1,6 @@
 # LEZ Event System (LP-0012)
 
-### 🎥 [Watch the Video Demo on YouTube](https://youtu.be/qmyBhWTii6Y)
+### 🎥 [Watch the Video Demo on YouTube](https://youtu.be/jPAzqcxP_go)
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](#evaluators-quickstart)
 [![Tests](https://img.shields.io/badge/tests-32%2F32%20passing-brightgreen)](#test-results)
@@ -17,7 +17,7 @@ The **LEZ Event System** solves a critical problem in the RISC0 zkVM environment
 
 Rather than requiring core rewrites to `ProgramOutput` or `TxReceipt` structs upstream, this architecture introduces a deterministic, framed event stream prepended to the standard execution journal. A transparent runtime adapter automatically manages event aggregation and flushing, ensuring events survive transaction panics without bleeding transport logic into the developer's SDK experience. The result is a highly compatible, protocol-grade transport layer that works with current journal semantics.
 
-### Architecture Flow: "Drain-before-Panic" Pattern
+### Architecture Flow: "Adapter-Driven Panic Capture" Pattern
 
 The following diagram illustrates how the SDK successfully rescues events during a transaction failure within the strict ZK environment:
 
@@ -133,7 +133,7 @@ cargo fmt --check --all
 
 ### Core SDK Implementation
 - **SDK Library**: [`lez-events/src/`](lez-events/src/)
-  - [`lib.rs`](lez-events/src/lib.rs) — Public API (`emit_event`, `execute_program`, `clear_events`)
+  - [`lib.rs`](lez-events/src/lib.rs) — Public API (`emit_event`, `clear_events`)
   - [`macros.rs`](lez-events/src/macros.rs) — `impl_lez_event!` macro for event type definition
   - [`event.rs`](lez-events/src/event.rs) — Core `EventRecord` and event buffer management
   - [`error.rs`](lez-events/src/error.rs) — Error types and boundary enforcement
