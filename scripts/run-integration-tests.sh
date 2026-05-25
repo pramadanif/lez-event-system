@@ -40,12 +40,14 @@ echo "  ✓ All unit tests passed"
 echo ""
 echo "[4/6] CLI smoke test (decode-raw)..."
 # Construct minimal Vec<EventRecord> hex:
-# count=1(4B LE) | program_id([0;32]) | seq=0(4B) | disc=1(8B) | sv=1(1B) | payload_len=5(4B) | "hello"(5B)
-SYNTHETIC_HEX="01000000"
+# LEZE=4c455a4501(5B) | count=1(4B LE) | program_id([0;32]) | seq=0(4B) | disc=1(8B) | sv=1(1B) | sh=[0;32] | payload_len=5(4B) | "hello"(5B)
+SYNTHETIC_HEX="4c455a4501"
+SYNTHETIC_HEX+="01000000"
 SYNTHETIC_HEX+="0000000000000000000000000000000000000000000000000000000000000000"
 SYNTHETIC_HEX+="00000000"
 SYNTHETIC_HEX+="0100000000000000"
 SYNTHETIC_HEX+="01"
+SYNTHETIC_HEX+="0000000000000000000000000000000000000000000000000000000000000000"
 SYNTHETIC_HEX+="05000000"
 SYNTHETIC_HEX+="68656c6c6f"
 cargo run --bin lez-event-cli -- decode-raw --hex "${SYNTHETIC_HEX}"
