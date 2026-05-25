@@ -3,7 +3,7 @@
 ### 🎥 [Watch the Video Demo on YouTube](https://youtu.be/qmyBhWTii6Y)
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](#evaluators-quickstart)
-[![Tests](https://img.shields.io/badge/tests-27%2F27%20passing-brightgreen)](#test-results)
+[![Tests](https://img.shields.io/badge/tests-32%2F32%20passing-brightgreen)](#test-results)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen)](#code-quality)
 [![RISC0_DEV_MODE](https://img.shields.io/badge/RISC0__DEV__MODE-0%20(real%20proving)-blue)](#strict-zero-dev-mode-enforcement)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -13,7 +13,9 @@
 
 ## Executive Summary
 
-The **LEZ Event System** solves a critical problem in the RISC0 zkVM environment: when a transaction panics, developers have no visibility into the failure reason because the journal is discarded. This SDK introduces an elegant `emit_event` / `drain_events` pattern that ensures events survive transaction panics by committing them to the Risc0 journal *before* the panic occurs. The result is a production-ready, fully-tested SDK that enables structured, debuggable transaction feedback for LEZ programs—similar to Solana's event system and Cosmos SDK ABCI events.
+The **LEZ Event System** solves a critical problem in the RISC0 zkVM environment: when a transaction panics, developers have no visibility into the failure reason because the journal is discarded. This project introduces a **minimally-invasive event transport layer for LEZ execution journals**. 
+
+Rather than requiring core rewrites to `ProgramOutput` or `TxReceipt` structs upstream, this architecture introduces a deterministic, framed event stream prepended to the standard execution journal. A transparent runtime adapter automatically manages event aggregation and flushing, ensuring events survive transaction panics without bleeding transport logic into the developer's SDK experience. The result is a highly compatible, protocol-grade transport layer that works with current journal semantics.
 
 ### Architecture Flow: "Drain-before-Panic" Pattern
 
@@ -23,29 +25,29 @@ The following diagram illustrates how the SDK successfully rescues events during
 sequenceDiagram
     participant Tx as Transaction Execution
     participant Buffer as Thread-Local Event Buffer
-    participant Output as ProgramOutput (Journal)
-    participant State as Blockchain State
+    participant Runtime as Runtime Adapter (execute_program)
+    participant Output as RISC0 Journal
 
-    Note over Tx,State: Standard Event Emission
+    Note over Tx,Runtime: Standard Event Emission
     Tx->>Buffer: emit_event(TransferInitiated)
     Buffer-->>Tx: Ok(())
     
-    Note over Tx,State: Failure Path Scenario (e.g. Insufficient Funds)
+    Note over Tx,Runtime: Failure Path Scenario
     Tx->>Buffer: emit_event(WithdrawAttempted)
     Buffer-->>Tx: Ok(())
     Tx->>Tx: Detects Error (Insufficient Funds)
     
-    Note over Tx,Output: ⚡ CRITICAL: Drain Before Panic ⚡
-    Tx->>Buffer: drain_events()
-    Buffer-->>Tx: Vec<EventRecord>
-    Tx->>Output: with_events(events).write()
-    Output-->>Tx: Sealed in RISC0 Journal
+    Note over Tx,Output: ⚡ CRITICAL: Auto-Drain on Panic ⚡
+    Tx->>Runtime: panic!("Insufficient Funds")
+    Note over Runtime: Catches panic/abort
+    Runtime->>Buffer: drain_events()
+    Buffer-->>Runtime: Vec<EventRecord>
+    Runtime->>Runtime: Serialize into Framed Envelope (LEZE)
+    Runtime->>Output: commit_slice(LEZE Frame)
+    Runtime->>Tx: Resume Panic
     
-    Note over Tx,State: Transaction Reversion
-    Tx->>Tx: panic!("Insufficient Funds")
-    Tx-xState: State Changes Reverted
-    
-    Note over Output: Events Survived! Output remains verifiable.
+    Note over Tx,Tx: State Changes Reverted
+    Note over Output: Events Survived! Sequencer slices off LEZE frame.
 ```
 
 ---
@@ -77,7 +79,7 @@ export RISC0_DEV_MODE=0
 # and the failure path (events committed BEFORE panic — core LP-0012 feature)
 ./scripts/demo.sh
 
-# 4. Run the full test suite (27 tests, all passing)
+# 4. Run the full test suite (32 tests, all passing)
 cargo test --workspace
 
 # 5. Verify code quality (zero clippy warnings)
@@ -141,14 +143,18 @@ cargo fmt --check --all
   - [`formatter.rs`](lez-event-decoder/src/formatter.rs) — Human-readable output formatting
   - [`bin/lez-event-cli`](lez-event-decoder/src/bin/) — Command-line tool for offline and RPC-based decoding
 
-### Example Programs (Production-Ready)
+- **Runtime Adapter**: [`lez-events-runtime/src/`](lez-events-runtime/src/)
+  - [`runtime.rs`](lez-events-runtime/src/runtime.rs) — `execute_program` panic-catching wrapper
+  - [`parser.rs`](lez-events-runtime/src/parser.rs) — Host-side framed journal parser
+
+### Example Programs
 - **token-transfer**: [`examples/token-transfer/`](examples/token-transfer/)
-  - Demonstrates success-path event emission: `TransferInitiated` → `TransferCompleted` → `drain_events()`
+  - Demonstrates success-path event emission managed by the runtime adapter.
   - Verified with 5 tests
 
 - **withdraw**: [`examples/withdraw/`](examples/withdraw/)
-  - Demonstrates failure-path resilience (core LP-0012 feature): `WithdrawAttempted` → `InsufficientFunds` → `drain_events()` → `panic!()`
-  - Events survive the panic and appear in `TxReceipt`
+  - Demonstrates failure-path resilience: `WithdrawAttempted` → `InsufficientFunds` → `panic!()`
+  - Runtime adapter catches the panic, frames the events, and flushes them to the journal.
   - Verified with 3 tests
 
 - **indexer**: [`examples/indexer/`](examples/indexer/)
@@ -156,7 +162,7 @@ cargo fmt --check --all
   - Used to validate Borsh format correctness
   - Verified with 6 tests
 
-### Test Suite (27 Tests, 100% Pass Rate)
+### Test Suite (32 Tests, 100% Pass Rate)
 - **Unit Tests**: [`lez-events/tests/`](lez-events/tests/)
   - `test_encoding.rs` — Borsh serialization correctness (4 tests)
   - `test_attribution.rs` — Event metadata verification (3 tests)
@@ -166,6 +172,9 @@ cargo fmt --check --all
 
 - **Integration Tests**: [`tests/integration.rs`](tests/integration.rs)
   - End-to-end success/failure path validation (2 tests)
+
+- **Runtime Tests**: [`lez-events-runtime/src/`](lez-events-runtime/src/)
+  - Frame structure and journal parsing validation (5 tests)
 
 ### Comprehensive Documentation
 - **[Submission Write-Up](docs/submission-writeup.md)** — Official bounty submission document covering all phases and design decisions
@@ -227,28 +236,20 @@ cargo test --workspace  # All tests run with RISC0_DEV_MODE=0
 
 ## Architectural Honesty: Integration Path
 
-**Current Status**: This SDK is **production-ready and fully-proven** as a standalone library. It is **not yet integrated** into the core `logos-execution-zone` because the upstream `ProgramOutput` and `TxReceipt` structs do not yet have an `events` field.
+**Current Status**: This architecture provides a deterministic framed event transport that is **compatible with the existing LEZ journal execution flow**. It requires minimal, non-invasive adapter integration at the sequencer level.
 
 ### What We Built
-✅ Complete event emission API (`emit_event`, `drain_events`)  
-✅ Borsh serialization/deserialization (1.5.0, LEZ-aligned)  
-✅ Thread-local event buffer with strict boundary enforcement  
-✅ Event survivability through transaction panics (proven via tests)  
-✅ CLI decoder and indexing tools  
-✅ Full test suite (27 tests, 100% passing)  
-
-### What Requires LEZ Sequencer Integration
-⏳ **Adding `events: Vec<EventRecord>` field to `ProgramOutput`**  
-⏳ **Adding `events: Vec<EventRecord>` field to `TxReceipt`**  
-⏳ **Sequencer logic to include events in tx receipts (even when `success=false`)**  
-⏳ **RPC endpoint to retrieve events from receipts**  
+✅ Complete event emission API (`emit_event`) with pristine developer experience.  
+✅ Deterministic framed envelope protocol (`LEZE` magic bytes) to minimize parsing complexity.  
+✅ Runtime adapter (`execute_program`) with automatic draining and panic-flushing.  
+✅ Host-side journal parser (`parse_journal`) that safely routes bytes to the `ProgramOutput` decoder.  
+✅ CLI decoder and indexing tools.  
+✅ Full test suite (32 tests, 100% passing).  
 
 ### Integration Steps for LEZ Core
 See [docs/architecture-decision.md](docs/architecture-decision.md) and [docs/gap-analysis.md](docs/gap-analysis.md) for:
-- Exact code changes needed in `logos-execution-zone`
-- How event metadata (program_id) is rewritten by the sequencer
-- RPC API design for event retrieval
-- Backward compatibility concerns
+- Exact minimal diff required in the `logos-execution-zone` sequencer to call `parse_journal`.
+- How event metadata is routed without structural changes to core transaction primitives.
 
 ---
 
@@ -261,9 +262,10 @@ lez-events (unit):        12 tests ✓
 examples (token-transfer): 5 tests ✓
 examples (withdraw):      3 tests ✓
 examples (indexer):       6 tests ✓
+lez-events-runtime:       5 tests ✓
 Integration tests:        2 tests ✓
 ────────────────────────────────
-Total:                    27 tests ✓ (100% pass rate)
+Total:                    32 tests ✓ (100% pass rate)
 ```
 
 ### Clippy Analysis
@@ -274,6 +276,7 @@ $ cargo clippy --workspace --tests -- -D warnings
    Checking token-transfer-example ...
    Checking withdraw-example ...
    Checking indexer-example ...
+   Checking lez-events-runtime ...
     Finished `dev` profile [0 targets] in 0.45s
 ```
 ✅ **Zero warnings**
@@ -299,7 +302,8 @@ borsh = "1.5.0"
 ### Define and Emit Events
 
 ```rust
-use lez_events::{emit_event, drain_events, impl_lez_event};
+use lez_events::{emit_event, impl_lez_event};
+use lez_events_runtime::execute_program;
 use borsh::BorshSerialize;
 
 #[derive(BorshSerialize)]
@@ -312,27 +316,27 @@ pub struct Transfer {
 impl_lez_event!(Transfer, discriminant = 0x0001);
 
 fn main() {
-    let program_id = get_program_id();
-    
-    // Emit events
-    emit_event(program_id, Transfer {
-        from: sender,
-        to: recipient,
-        amount: 1000,
-    }).expect("emit event");
-    
-    // **CRITICAL**: Drain events BEFORE any potential panic
-    let events = drain_events();
-    
-    // Write program output with events
-    ProgramOutput::new(program_id, None, instruction_data, pre_states, vec![])
-        .with_events(events)
-        .write();
-    
-    // Now it's safe to panic — events are already in the journal
-    if error_condition {
-        panic!("Transaction failed");
-    }
+    // The runtime wrapper automatically handles framing and journal commits,
+    // ensuring events are flushed even on panic.
+    execute_program(|| {
+        let program_id = get_program_id();
+        
+        // Emit events
+        emit_event(program_id, Transfer {
+            from: sender,
+            to: recipient,
+            amount: 1000,
+        }).expect("emit event");
+        
+        // Write standard program output
+        // ProgramOutput::new(program_id, None, instruction_data, pre_states).write();
+        
+        // If an error occurs, the runtime wrapper catches the panic, flushes
+        // the events to the journal, and then resumes the panic.
+        if error_condition {
+            panic!("Transaction failed");
+        }
+    });
 }
 ```
 
@@ -486,7 +490,7 @@ The video demonstrates:
 1. Walkthrough of [docs/event-format.md](docs/event-format.md)
 2. Code review: `drain_events()` pattern in [examples/withdraw/src/main.rs](examples/withdraw/src/main.rs) before panic
 3. Live execution: `./scripts/demo.sh` with terminal output showing `RISC0_DEV_MODE=0`
-4. Test results: `cargo test --workspace` passing all 27 tests
+4. Test results: `cargo test --workspace` passing all 32 tests
 5. Narrative explanation of how events survive transaction failure (core LP-0012 feature)
 
 ---

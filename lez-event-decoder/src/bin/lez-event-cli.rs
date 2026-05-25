@@ -13,6 +13,7 @@ use borsh::BorshDeserialize;
 use clap::{Parser, Subcommand};
 use lez_event_decoder::{decode_event, to_display, to_json, EventSchema};
 use lez_events::EventRecord;
+use lez_events_runtime::parse_journal;
 use serde::Deserialize;
 
 #[derive(Parser)]
@@ -39,12 +40,12 @@ enum Commands {
         format: String,
     },
 
-    /// Decode events from raw Borsh-encoded bytes without a running sequencer.
+    /// Decode events from raw framed journal bytes.
     DecodeRaw {
-        /// Hex-encoded Borsh bytes of a `Vec<EventRecord>`.
+        /// Hex-encoded journal bytes containing the LEZE event frame.
         #[arg(long, conflicts_with = "file")]
         hex: Option<String>,
-        /// Path to a binary file containing Borsh-encoded `Vec<EventRecord>`.
+        /// Path to a binary file containing the journal.
         #[arg(long)]
         file: Option<String>,
     },
@@ -110,9 +111,9 @@ fn print_events(records: &[EventRecord], schemas: &[EventSchema], from_failed: b
     }
 }
 
-fn records_from_bytes(bytes: &[u8]) -> Result<Vec<EventRecord>> {
-    Vec::<EventRecord>::deserialize(&mut &bytes[..])
-        .context("failed to Borsh-deserialize Vec<EventRecord>")
+fn records_from_journal(bytes: &[u8]) -> Result<Vec<EventRecord>> {
+    let (events, _) = parse_journal(bytes).context("failed to parse framed journal")?;
+    Ok(events)
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ async fn cmd_decode_raw(hex_arg: Option<&str>, file_arg: Option<&str>) -> Result
         (None, None) => bail!("provide --hex or --file"),
     };
 
-    let records = records_from_bytes(&bytes)?;
+    let records = records_from_journal(&bytes)?;
     let schemas = no_schemas();
     print_events(&records, &schemas, false, "display");
     Ok(())

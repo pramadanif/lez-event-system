@@ -5,9 +5,10 @@
 //!
 //! All tests run with RISC0_DEV_MODE=0 (real proving semantics — no mock mode).
 
-use borsh::{BorshDeserialize, BorshSerialize};
+use borsh::BorshSerialize;
 use lez_event_decoder::{decode_event, to_display, to_json, EventSchema};
-use lez_events::{clear_events, drain_events, emit_event, impl_lez_event, EventRecord};
+use lez_events::{clear_events, drain_events, emit_event, impl_lez_event};
+use lez_events_runtime::parse_journal;
 
 // ─── Helper types ──────────────────────────────────────────────────────────
 
@@ -52,10 +53,15 @@ fn full_pipeline_success_path() {
     let events = drain_events();
     assert_eq!(events.len(), 1);
 
-    // Verify Borsh round-trip
-    let bytes = borsh::to_vec(&events).expect("borsh encode");
-    let decoded: Vec<EventRecord> =
-        BorshDeserialize::deserialize(&mut &bytes[..]).expect("borsh decode");
+    // Build a mock journal frame
+    let mut journal = Vec::new();
+    journal.extend_from_slice(&[0x4C, 0x45, 0x5A, 0x45]); // LEZE
+    journal.push(1); // Version
+    journal.extend_from_slice(&1u32.to_le_bytes()); // Count
+    journal.extend_from_slice(&borsh::to_vec(&events[0]).unwrap());
+
+    // Verify Framing round-trip
+    let (decoded, _rest) = parse_journal(&journal).expect("parse journal");
     assert_eq!(decoded.len(), 1);
     assert_eq!(decoded[0].discriminant, 0x0001);
     assert_eq!(decoded[0].sequence, 0);
@@ -88,14 +94,18 @@ fn full_pipeline_failure_path() {
 
     // CRITICAL: drain before panic
     let events = drain_events();
-    let bytes = borsh::to_vec(&events).expect("encode");
+    // Build a mock journal frame
+    let mut journal = Vec::new();
+    journal.extend_from_slice(&[0x4C, 0x45, 0x5A, 0x45]); // LEZE
+    journal.push(1); // Version
+    journal.extend_from_slice(&1u32.to_le_bytes()); // Count
+    journal.extend_from_slice(&borsh::to_vec(&events[0]).unwrap());
 
-    // Simulate panic — events are already encoded
+    // Simulate panic — journal is already framed
     let _ = std::panic::catch_unwind(|| panic!("tx failed"));
 
-    // Verify events are fully decodable from bytes captured before panic
-    let decoded: Vec<EventRecord> =
-        BorshDeserialize::deserialize(&mut &bytes[..]).expect("decode after panic");
+    // Verify events are fully decodable from journal bytes captured before panic
+    let (decoded, _rest) = parse_journal(&journal).expect("parse after panic");
     assert_eq!(decoded.len(), 1, "event survives transaction panic");
     assert_eq!(decoded[0].discriminant, 0x0011);
 
@@ -162,7 +172,11 @@ fn borsh_encoding_is_deterministic() {
         let events = drain_events();
         borsh::to_vec(&events).unwrap()
     };
-    assert_eq!(make(), make(), "Borsh encoding must be deterministic");
+    assert_eq!(
+        make(),
+        make(),
+        "Borsh encoding and framing must be deterministic"
+    );
 }
 
 /// Multiple events are ordered by sequence number.

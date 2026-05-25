@@ -9,8 +9,9 @@
 //! ```text
 //! emit(WithdrawAttempted)
 //! emit(InsufficientFunds)        ← only if balance check fails
-//! drain_events() + write_output  ← MUST happen before panic
-//! panic!("Insufficient funds")   ← journal already sealed with events
+//! panic!("Insufficient funds")   
+//!
+//! Runtime wrapper catches panic, flushes frame, and resumes panic.
 //! ```
 //!
 //! The sequencer reads the journal before deciding to revert state, so
@@ -18,7 +19,8 @@
 //! `success = false`.
 
 use borsh::BorshSerialize;
-use lez_events::{drain_events, emit_event, impl_lez_event, EventRecord};
+use lez_events::{emit_event, impl_lez_event};
+use lez_events_runtime::execute_program;
 
 // ---------------------------------------------------------------------------
 // Event types
@@ -68,88 +70,57 @@ fn read_inputs() -> (WithdrawInstruction, [u8; 32]) {
     (instruction, program_id)
 }
 
-fn write_outputs_failure(events: Vec<EventRecord>) {
-    // Stub: committed to journal even though the tx fails
-    println!("=== program output (FAILED tx) ===");
-    println!("events committed: {}", events.len());
-    for e in &events {
-        println!(
-            "  [seq={}] discriminant=0x{:04x} payload_len={}",
-            e.sequence,
-            e.discriminant,
-            e.payload.len()
-        );
-    }
-}
-
-fn write_outputs_success(events: Vec<EventRecord>) {
-    println!("=== program output (SUCCESS tx) ===");
-    println!("events committed: {}", events.len());
-    for e in &events {
-        println!(
-            "  [seq={}] discriminant=0x{:04x} payload_len={}",
-            e.sequence,
-            e.discriminant,
-            e.payload.len()
-        );
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Main program logic — failure path
 // ---------------------------------------------------------------------------
 
 fn main() {
-    let (instr, program_id) = read_inputs();
+    execute_program(|| {
+        let (instr, program_id) = read_inputs();
 
-    // Event 1: always emitted — records the attempt
-    emit_event(
-        program_id,
-        WithdrawAttempted {
-            account: instr.account,
-            requested: instr.amount,
-        },
-    )
-    .expect("emit WithdrawAttempted");
-
-    if instr.balance < instr.amount {
-        // Event 2: emitted before panic so it is preserved in the journal
+        // Event 1: always emitted — records the attempt
         emit_event(
             program_id,
-            InsufficientFunds {
+            WithdrawAttempted {
                 account: instr.account,
                 requested: instr.amount,
-                available: instr.balance,
             },
         )
-        .expect("emit InsufficientFunds");
+        .expect("emit WithdrawAttempted");
 
-        // CRITICAL: drain and write BEFORE panicking
-        // The sequencer reads these events from the journal before reverting state.
-        let events = drain_events();
-        write_outputs_failure(events);
+        if instr.balance < instr.amount {
+            // Event 2: emitted before panic so it is preserved in the journal
+            emit_event(
+                program_id,
+                InsufficientFunds {
+                    account: instr.account,
+                    requested: instr.amount,
+                    available: instr.balance,
+                },
+            )
+            .expect("emit InsufficientFunds");
 
-        // TX FAILS HERE — journal is already sealed with both events above
-        panic!(
-            "Insufficient funds: requested {}, available {}",
-            instr.amount, instr.balance
-        );
-    }
+            // CRITICAL: Panic here!
+            // The runtime wrapper `execute_program` automatically catches this panic,
+            // frames the events, and writes them to the journal before aborting.
+            panic!(
+                "Insufficient funds: requested {}, available {}",
+                instr.amount, instr.balance
+            );
+        }
 
-    // Success path
-    let remaining = instr.balance - instr.amount;
-    emit_event(
-        program_id,
-        WithdrawCompleted {
-            account: instr.account,
-            amount: instr.amount,
-            remaining,
-        },
-    )
-    .expect("emit WithdrawCompleted");
+        // Success path
+        let remaining = instr.balance - instr.amount;
+        emit_event(
+            program_id,
+            WithdrawCompleted {
+                account: instr.account,
+                amount: instr.amount,
+                remaining,
+            },
+        )
+        .expect("emit WithdrawCompleted");
 
-    let events = drain_events();
-    write_outputs_success(events);
-
-    println!("Withdrawal of {} tokens completed.", instr.amount);
+        println!("Withdrawal of {} tokens completed.", instr.amount);
+    });
 }

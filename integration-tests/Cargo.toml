@@ -6,6 +6,7 @@ publish = false
 
 [dev-dependencies]
 lez-events = { path = "../lez-events" }
+lez-events-runtime = { path = "../lez-events-runtime" }
 lez-event-decoder = { path = "../lez-event-decoder" }
 borsh = { workspace = true }
 serde_json = { workspace = true }

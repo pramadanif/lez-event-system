@@ -1,0 +1,17 @@
+[package]
+name = "lez-events-runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lez-events = { path = "../lez-events" }
+borsh = { version = "=1.5.0" }
+hex = { version = "0.4.3" }
+thiserror = "=1.0.57"
+
+[target.'cfg(target_os = "zkvm")'.dependencies]
+risc0-zkvm = { version = "0.20.1", default-features = false }
+hex = { version = "0.4.3" }
+
+[target.'cfg(not(target_os = "zkvm"))'.dependencies]
+risc0-zkvm = { version = "0.20.1" }

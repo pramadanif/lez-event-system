@@ -68,14 +68,15 @@ echo ""
 echo "[5/7] Demo: Offline event decoding (decode-raw)"
 echo "  Decodes Borsh-encoded Vec<EventRecord> without a running sequencer"
 echo ""
-# Construct minimal Vec<EventRecord> in hex
-HEX="01000000"
-HEX+="0000000000000000000000000000000000000000000000000000000000000000"
-HEX+="00000000"
-HEX+="0100000000000000"
-HEX+="01"
-HEX+="05000000"
-HEX+="68656c6c6f"
+# Construct minimal Framed Journal in hex (LEZE | version | count | borsh_event)
+HEX="4c455a450101000000" # LEZE | v1 | count=1
+HEX+="0000000000000000000000000000000000000000000000000000000000000000" # program_id
+HEX+="00000000" # sequence
+HEX+="0100000000000000" # discriminant
+HEX+="01" # schema_version
+HEX+="0000000000000000000000000000000000000000000000000000000000000000" # schema_hash
+HEX+="05000000" # payload len
+HEX+="68656c6c6f" # payload
 echo "  Hex: ${HEX:0:32}..."
 cargo run --quiet --release --bin lez-event-cli -- decode-raw --hex "${HEX}"
 echo "  ✓ decode-raw works (Unknown event — no schema registered)"
