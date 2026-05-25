@@ -40,7 +40,7 @@ sequenceDiagram
     Note over Tx,Output: ⚡ CRITICAL: Auto-Drain on Panic ⚡
     Tx->>Runtime: panic!("Insufficient Funds")
     Note over Runtime: Catches panic/abort
-    Runtime->>Buffer: drain_events()
+    Runtime->>Buffer: execute_program()
     Buffer-->>Runtime: Vec<EventRecord>
     Runtime->>Runtime: Serialize into Framed Envelope (LEZE)
     Runtime->>Output: commit_slice(LEZE Frame)
@@ -133,7 +133,7 @@ cargo fmt --check --all
 
 ### Core SDK Implementation
 - **SDK Library**: [`lez-events/src/`](lez-events/src/)
-  - [`lib.rs`](lez-events/src/lib.rs) — Public API (`emit_event`, `drain_events`, `clear_events`)
+  - [`lib.rs`](lez-events/src/lib.rs) — Public API (`emit_event`, `execute_program`, `clear_events`)
   - [`macros.rs`](lez-events/src/macros.rs) — `impl_lez_event!` macro for event type definition
   - [`event.rs`](lez-events/src/event.rs) — Core `EventRecord` and event buffer management
   - [`error.rs`](lez-events/src/error.rs) — Error types and boundary enforcement
@@ -384,7 +384,7 @@ Emit a typed event into the thread-local buffer.
 - `Err(EventError::BufferFull)` if 64 events have been emitted
 - `Err(EventError::TotalSizeExceeded)` if total buffer would exceed 65,536 bytes
 
-### `drain_events() -> Vec<EventRecord>`
+### `execute_program() -> Vec<EventRecord>`
 
 Extract all buffered events without clearing the buffer. Returns an empty `Vec` if no events have been emitted.
 

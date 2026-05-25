@@ -7,7 +7,7 @@ Extend `ProgramOutput` struct to include `events: Vec<EventRecord>` field.
 
 **Mechanism:**
 1. Program calls `emit_event()` → thread-local buffer
-2. Before calling `write_nssa_outputs()`, program calls `drain_events()`
+2. Before calling `write_nssa_outputs()`, program calls `execute_program()`
 3. Events passed to output writer
 4. `ProgramOutput::write()` commits entire struct (with events) to journal
 5. Sequencer deserializes journal, extracts events
@@ -32,13 +32,13 @@ emit_event(program_id, Event1 { ... }).unwrap();  // Always runs
 
 if can_fail_here() {
     emit_event(program_id, FailureEvent { ... }).unwrap();
-    let events = drain_events();
+    let events = execute_program();
     write_nssa_outputs_with_events(..., events);  // Write now, before panic
     panic!("reason");  // Events already in journal
 }
 
 emit_event(program_id, SuccessEvent { ... }).unwrap();
-let events = drain_events();
+let events = execute_program();
 write_nssa_outputs_with_events(..., events);  // Normal success path
 ```
 
@@ -96,7 +96,7 @@ pub struct ProgramOutput {
 
 ### Failure Path
 - Program must emit events BEFORE panic
-- Use `drain_events()` to flush before potential failure point
+- Use `execute_program()` to flush before potential failure point
 - Defensively write output before any panic
 - Sequencer extracts events from journal regardless of state diff result
 

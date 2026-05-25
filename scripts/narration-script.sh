@@ -276,7 +276,7 @@ wc -l docs/*.md
 #   "This browser demo lets you decode Borsh events interactively.
 #    You can load example events and see exactly what each byte means —
 #    program_id in blue, sequence in green, discriminant in yellow,
-#    payload in red.
+#    schema_hash in orange, and payload in red.
 #
 #    The browser-side decoder is pure JavaScript Borsh — no server required.
 #    Evaluators can use this to explore the wire format without setting up

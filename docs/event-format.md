@@ -430,45 +430,33 @@ impl_lez_event!(InsufficientBalance, discriminant = EVENT_INSUFFICIENT_BALANCE);
 
 // In program:
 fn main() {
-    let program_id = get_program_id();
-    let (input, instruction_data) = read_nssa_inputs::<Instruction>();
-    let Instruction::Transfer { to, amount } = instruction;
-    let from = input.pre_states[0].account.address;
+    let program_id = [0xAA; 32];
+    let from = [0x01; 32];
+    let to = [0x02; 32];
+    let amount = 100;
+    let balance = 50;
 
-    emit_event(program_id, TransferInitiated {
-        from, to, amount,
-    }).expect("emit transfer initiated");
+    execute_program(|| {
+        if balance < amount {
+            emit_event(program_id, InsufficientFunds {
+                account: from,
+                requested: amount,
+                available: balance,
+            }).expect("emit insufficient balance");
 
-    let balance = get_balance(from);
-    if balance < amount {
-        emit_event(program_id, InsufficientBalance {
-            account: from,
-            requested: amount,
-            available: balance,
-        }).expect("emit insufficient balance");
+            panic!("Insufficient balance");  // Adapter catches this and seals journal
+        }
 
-        let events = drain_events();
-        write_nssa_outputs_with_events(instruction_data, vec![], vec![], events);
-        panic!("Insufficient balance");  // Events already in journal
-    }
-
-    // Apply transfer
-    let new_balance = balance - amount;
-    emit_event(program_id, TransferCompleted {
-        from, to, amount,
-        from_balance_after: new_balance,
-    }).expect("emit transfer completed");
-
-    let events = drain_events();
-    write_nssa_outputs_with_events(
-        instruction_data,
-        vec![
-            AccountPostState::new(from_post_state),
-            AccountPostState::new(to_post_state),
-        ],
-        vec![],
-        events,
-    );
+        // Apply transfer
+        let new_balance = balance - amount;
+        emit_event(program_id, TransferCompleted {
+            from, to, amount,
+            from_balance_after: new_balance,
+        }).expect("emit transfer completed");
+        
+        // Returns successfully, adapter seals journal normally
+        vec![] // Return post states
+    });
 }
 ```
 

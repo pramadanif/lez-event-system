@@ -27,7 +27,7 @@ The lez-event-system is **production-ready** with proven correctness and perform
 - **Events Emitted**: 2 (WithdrawAttempted + InsufficientFunds)
 - **Event Discriminants**: 0x0010, 0x0011
 - **Total Payload Size**: 88 bytes
-- **Panic**: ✓ Occurs after drain_events()
+- **Panic**: ✓ Occurs after execute_program()
 - **Result**: ✓ Events committed to journal BEFORE panic (core LP-0012 feature)
 
 ## `emit_event()` Characteristics
@@ -41,7 +41,7 @@ The lez-event-system is **production-ready** with proven correctness and perform
 | 512 bytes | Borsh (1.5.0) | Medium-large event |
 | 1,024 bytes (max) | Borsh (1.5.0) | Maximum allowed payload |
 
-## `drain_events()` Characteristics
+## `execute_program()` Characteristics
 
 | Event Count | Operation | Notes |
 |---|---|---|
@@ -68,7 +68,7 @@ The lez-event-system is **production-ready** with proven correctness and perform
 
 Once the LEZ testnet sequencer is running with CU metering enabled, we will measure:
 1. Exact CU cost for `emit_event()` with various payload sizes
-2. Exact CU cost for `drain_events()` with various event counts
+2. Exact CU cost for `execute_program()` with various event counts
 3. Total transaction CU cost including event overhead
 4. Comparison with LEZ's per-transaction budget
 
@@ -76,7 +76,7 @@ Once the LEZ testnet sequencer is running with CU metering enabled, we will meas
 
 ### RISC0 Journal Commitment
 
-The `drain_events()` function:
+The `execute_program()` function:
 1. Serializes all EventRecords into a `ProgramOutput` struct
 2. Writes to RISC0 journal via `env::commit()`
 3. Returns control to the program
@@ -85,13 +85,13 @@ The cost of `env::commit()` scales with the total byte count of all serialized e
 
 ### Event Survivability
 
-The core LP-0012 feature is that events committed via `drain_events()` survive even if the program panics afterward:
+The core LP-0012 feature is that events committed via `execute_program()` survive even if the program panics afterward:
 
 ```rust
 // Program logic...
 emit_event(...);  // Add to thread-local buffer
 emit_event(...);  // Add to thread-local buffer
-drain_events();   // COMMIT to journal (atomic)
+execute_program();   // COMMIT to journal (atomic)
 // ...
 if error_condition {
     panic!("Transaction failed");  // State reverted, but events survive

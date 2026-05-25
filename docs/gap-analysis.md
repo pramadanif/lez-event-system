@@ -46,7 +46,7 @@ Our current approach: We provide a runtime adapter (`execute_program`) that catc
 ### Phase 3 ✅ COMPLETE
 - [x] emit_event() returns Result, never panics
 - [x] All 4 error variants with stable codes 0xEE01–0xEE04
-- [x] drain_events() implemented
+- [x] execute_program() adapter implemented
 - [x] LezEvent trait + impl_lez_event! macro
 
 ### Phase 4 ✅ SOLVED VIA RUNTIME ADAPTER

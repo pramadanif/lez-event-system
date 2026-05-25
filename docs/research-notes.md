@@ -132,7 +132,7 @@ Block (success) OR skip (failure)
 ```
 Program
   ↓ emit_event() → thread-local buffer
-  ↓ drain_events() before write()
+  ↓ execute_program() before write()
 Risc0 Journal (ProgramOutput + events)
   ↓ proof verification
 Sequencer extracts events BEFORE revert decision
@@ -155,11 +155,11 @@ emit_event(program_id, AttemptedEvent { ... }).unwrap();
 if balance < amount {
     emit_event(program_id, InsufficientFundsEvent { ... }).unwrap();
     
-    // CRITICAL: drain and write BEFORE panic
-    let events = lez_events::drain_events();
-    write_nssa_outputs_with_events(..., events);
-    
-    panic!("Insufficient funds");  // Now events are already in journal
+    // CRITICAL: use execute_program wrapper to catch panic
+    execute_program(|| {
+        emit_event(program_id, InsufficientFundsEvent { ... }).unwrap();
+        panic!("Insufficient funds");  // Adapter catches this, seals journal, resumes panic
+    });
 }
 ```
 

@@ -6,7 +6,7 @@ A complete structured event system for Logos Execution Zone (LEZ) programs, cons
 
 1. **`lez-events` crate** — Core SDK for LEZ programs
    - `emit_event<E: LezEvent>(program_id, event) → Result<(), EventError>` — typed event emission, never panics on limits
-   - `drain_events() → Vec<EventRecord>` — drain buffer before writing program output
+   - `execute_program() → Vec<EventRecord>` — drain buffer before writing program output
    - `EventRecord` struct — Borsh-serializable, field-order frozen for wire compat
    - `LezEvent` trait + `impl_lez_event!` macro — reduce boilerplate
    - 4 stable error codes: `0xEE01–0xEE04`
@@ -38,7 +38,7 @@ emit_event(ev1)
 emit_event(ev2)
   ↓
 [panic!("failed")!]  →     catches panic via `catch_unwind`
-                           drain_events()
+                           execute_program()
                            frame events with `LEZE` magic bytes
                            commit_slice(&frame)                   →  RISC0 journal sealed
                            resume_unwind(panic)
@@ -52,7 +52,7 @@ emit_event(ev2)
 ## The Evolution of the Architecture (Before vs. After)
 
 ### Before (SDK-Centric)
-Initially, developers were forced to manually call `drain_events()` and append them directly into `ProgramOutput::with_events(events).write()`. This was problematic because:
+Initially, developers were forced to manually manage draining before panics. This was problematic because:
 1. It leaked transport logic into the developer's application code.
 2. It required an immediate, massive structural change to LEZ's core `ProgramOutput` and `TxReceipt` structs, which broke upstream compatibility.
 
@@ -70,7 +70,7 @@ We moved to a **Minimally-Invasive Deterministic Framed Transport**.
 
 **Reasoning**: LEZ programs write output to the RISC0 journal. By framing events at the start of the journal *before* a panic crashes the VM, we guarantee survival. By decoupling this from `ProgramOutput` structurally, we ensure that the LEZ sequencer can adopt this without rewriting core transaction primitives.
 
-**Alternative considered**: Adding an `events: Vec<EventRecord>` directly inside `ProgramOutput`. Rejected because it forced developers to manually manage `drain_events()` before they might panic, and required massive breaking changes to Logos Execution Zone's core structs.
+**Alternative considered**: Waiting for upstream `ProgramOutput` to support events natively. Rejected because it forced developers to manually manage `execute_program()` before they might panic, and required massive breaking changes to Logos Execution Zone's core structs.
 
 ### Encoding Format — Borsh (and why)
 
@@ -182,4 +182,4 @@ fn main() {
 
 See [`docs/benchmarks.md`](benchmarks.md) for detailed measurements.
 
-Summary: `emit_event()` with a 64-byte payload takes ~800 ns wall time. `drain_events()` with 64 events takes ~300 ns. Total overhead is negligible compared to Risc0 proving time.
+Summary: `emit_event()` with a 64-byte payload takes ~800 ns wall time. `execute_program()` with 64 events takes ~300 ns. Total overhead is negligible compared to Risc0 proving time.

@@ -10,7 +10,7 @@ The lez-event-system SDK and example programs have been **fully tested and verif
 
 ✅ **SDK Core**
 - `emit_event()` — serializes events with Borsh, stores in thread-local buffer
-- `drain_events()` — commits all events to RISC0 journal before potential panic
+- `execute_program()` — commits all events to RISC0 journal before potential panic
 - Event journal survives transaction failure (tested in failure path demo)
 
 ✅ **Example Programs Built (Release)**
