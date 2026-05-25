@@ -1,6 +1,7 @@
 # LEZ Event System (LP-0012)
 
 ### 🎥 [Watch the Video Demo on YouTube](https://youtu.be/jPAzqcxP_go)
+### ⚡ [Try the Interactive Decoder Live](https://lez-event-system.vercel.app/)
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](#evaluators-quickstart)
 [![Tests](https://img.shields.io/badge/tests-32%2F32%20passing-brightgreen)](#test-results)
