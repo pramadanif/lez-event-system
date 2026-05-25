@@ -388,7 +388,7 @@ Emit a typed event into the thread-local buffer.
 
 Extract all buffered events without clearing the buffer. Returns an empty `Vec` if no events have been emitted.
 
-**Must be called immediately before `ProgramOutput::write()`** so that events are included in the sealed Risc0 journal.
+*Note: Developers should use the `execute_program` runtime adapter which handles draining automatically, rather than calling this directly.*
 
 ### `clear_events() -> usize`
 
@@ -488,7 +488,7 @@ lez-event-system/
 
 The video demonstrates:
 1. Walkthrough of [docs/event-format.md](docs/event-format.md)
-2. Code review: `drain_events()` pattern in [examples/withdraw/src/main.rs](examples/withdraw/src/main.rs) before panic
+2. Code review: `execute_program` runtime adapter pattern in [examples/withdraw/src/main.rs](examples/withdraw/src/main.rs) before panic
 3. Live execution: `./scripts/demo.sh` with terminal output showing `RISC0_DEV_MODE=0`
 4. Test results: `cargo test --workspace` passing all 32 tests
 5. Narrative explanation of how events survive transaction failure (core LP-0012 feature)
